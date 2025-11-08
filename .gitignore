@@ -1,0 +1,110 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# testing
+/coverage
+/playwright-report
+/test-results
+/.nyc_output
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+/dist
+
+# misc
+.DS_Store
+*.pem
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# local env files
+.env
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# jest
+/jest-cache/
+/.jest/
+
+# playwright
+/playwright/.cache/
+/playwright-report/
+/test-results/
+
+# docker
+*.log
+docker-compose.override.yml
+
+# IDE - VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history
+
+# IDE - JetBrains
+.idea/
+*.iml
+*.ipr
+*.iws
+.idea_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+
+# Lock files (keep package-lock.json but ignore others)
+# yarn.lock
+# pnpm-lock.yaml
+
+# Build artifacts
+/build/
+/dist/
+/.next/
+/out/
+
+# Cache directories
+.cache/
+.parcel-cache/
+.turbo/
+
+# Storybook
+/storybook-static
+
+# Generated documentation
+/docs-generated/

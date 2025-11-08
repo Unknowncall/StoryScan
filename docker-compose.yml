@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  storyscan:
+    build: .
+    container_name: storyscan
+    ports:
+      - "3000:3000"
+    environment:
+      # Comma-separated list of directories to scan
+      # Each directory will appear as an option in the UI
+      - SCAN_DIRECTORIES=/data/media,/data/downloads,/data/backups
+    volumes:
+      # Mount the directories you want to scan
+      # Format: host_path:container_path:ro (read-only recommended for safety)
+      - /mnt/user/media:/data/media:ro
+      - /mnt/user/downloads:/data/downloads:ro
+      - /mnt/user/backups:/data/backups:ro
+    restart: unless-stopped
+    # Optional: Add memory limits to prevent the scanner from using too much RAM
+    mem_limit: 2g
+    # Optional: Use a specific network
+    # networks:
+    #   - unraid
+
+# Optional: Define custom networks
+# networks:
+#   unraid:
+#     external: true
