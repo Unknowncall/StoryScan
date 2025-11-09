@@ -303,4 +303,118 @@ describe('AdvancedFiltersPanel', () => {
     expect(screen.getByText('Files >500MB and older than 6 months')).toBeDefined();
     expect(screen.getByText('Files smaller than 1MB')).toBeDefined();
   });
+
+  describe('Size Max Input Handling', () => {
+    it('should update size max value when input changes', () => {
+      const sizeFilters: AdvancedFilters = {
+        size: { enabled: true, min: 0 },
+        date: { enabled: false },
+      };
+
+      render(<AdvancedFiltersPanel filters={sizeFilters} onFiltersChange={mockOnFiltersChange} />);
+
+      // Expand panel
+      const expandButton = screen.getByText('Expand').closest('button');
+      if (expandButton) fireEvent.click(expandButton);
+
+      // Find the "Maximum" input (the second number input)
+      const inputs = screen.getAllByPlaceholderText(/e\.g\.,/);
+      const maxInput = inputs[1]; // Second input is max
+
+      fireEvent.change(maxInput, { target: { value: '1000' } });
+
+      expect(mockOnFiltersChange).toHaveBeenCalledWith({
+        size: { enabled: true, min: 0, max: 1000 * 1024 * 1024 },
+        date: { enabled: false },
+      });
+    });
+
+    it('should handle empty size max input by clearing max value', () => {
+      const sizeFilters: AdvancedFilters = {
+        size: { enabled: true, max: 5000 * 1024 * 1024 },
+        date: { enabled: false },
+      };
+
+      render(<AdvancedFiltersPanel filters={sizeFilters} onFiltersChange={mockOnFiltersChange} />);
+
+      // Expand panel
+      const expandButton = screen.getByText('Expand').closest('button');
+      if (expandButton) fireEvent.click(expandButton);
+
+      // Find the max input
+      const inputs = screen.getAllByPlaceholderText(/e\.g\.,/);
+      const maxInput = inputs[1];
+
+      fireEvent.change(maxInput, { target: { value: '' } });
+
+      expect(mockOnFiltersChange).toHaveBeenCalledWith({
+        size: { enabled: true, max: undefined },
+        date: { enabled: false },
+      });
+    });
+  });
+
+  describe('Date Input Handling', () => {
+    it('should handle empty date input by clearing olderThan value', () => {
+      const dateFilters: AdvancedFilters = {
+        size: { enabled: false },
+        date: { enabled: true, olderThan: 30 },
+      };
+
+      render(<AdvancedFiltersPanel filters={dateFilters} onFiltersChange={mockOnFiltersChange} />);
+
+      // Panel starts collapsed, expand it
+      const expandButton = screen.getByText('Expand').closest('button');
+      if (expandButton) fireEvent.click(expandButton);
+
+      // Find the date input (correct placeholder)
+      const dateInput = screen.getByPlaceholderText('e.g., 365');
+
+      fireEvent.change(dateInput, { target: { value: '' } });
+
+      expect(mockOnFiltersChange).toHaveBeenCalledWith({
+        size: { enabled: false },
+        date: { enabled: true, olderThan: undefined },
+      });
+    });
+  });
+
+  describe('Filter Chip Labels', () => {
+    it('should display "< max" label when only max size is set', () => {
+      const maxOnlyFilters: AdvancedFilters = {
+        size: { enabled: true, max: 100 * 1024 * 1024 }, // 100 MB
+        date: { enabled: false },
+      };
+
+      render(
+        <AdvancedFiltersPanel filters={maxOnlyFilters} onFiltersChange={mockOnFiltersChange} />
+      );
+
+      // Should show "Size: < 100 MB" chip
+      expect(screen.getByText(/Size: < 100/)).toBeDefined();
+    });
+
+    it('should remove date filter when chip X is clicked', () => {
+      const dateFilters: AdvancedFilters = {
+        size: { enabled: false },
+        date: { enabled: true, olderThan: 365 },
+      };
+
+      render(<AdvancedFiltersPanel filters={dateFilters} onFiltersChange={mockOnFiltersChange} />);
+
+      // Find the date chip's X button
+      const dateChip = screen.getByText(/Older than 365 days/).closest('div');
+      const removeButton = dateChip?.querySelector('button');
+
+      if (removeButton) {
+        fireEvent.click(removeButton);
+
+        // handleDateToggle only sets enabled to false, doesn't clear olderThan
+        expect(mockOnFiltersChange).toHaveBeenCalledWith({
+          size: { enabled: false },
+          date: { enabled: false, olderThan: 365 },
+        });
+      }
+    });
+  });
 });

@@ -24,15 +24,18 @@ interface TreemapData extends d3.HierarchyRectangularNode<FileNode> {
 export default function Treemap({
   data,
   onNodeClick,
-  maxDepth = 6,
-  minSizePercentage = 0.01,
-  maxNodes = 2000,
+  maxDepth = 5,
+  minSizePercentage = 0.05, // Increased to filter out tiny items
+  maxNodes = 1500, // Reduced for better performance
 }: TreemapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNode, setHoveredNode] = useState<FileNode | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [hiddenItemsInfo, setHiddenItemsInfo] = useState<
+    Map<string, { count: number; totalSize: number }>
+  >(new Map());
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -75,6 +78,7 @@ export default function Treemap({
     const totalSize = root.value || 1;
     const minSize = (totalSize * minSizePercentage) / 100;
 
+    // Get all descendants and filter them
     let nodes = root
       .descendants()
       .filter((d) => {
@@ -88,10 +92,40 @@ export default function Treemap({
       })
       .sort((a, b) => (b.value || 0) - (a.value || 0));
 
+    // Track which nodes were truncated
+    const totalNodesBeforeTruncation = nodes.length;
+    const wasTruncated = nodes.length > maxNodes;
+
     // Limit total number of nodes for performance
-    if (nodes.length > maxNodes) {
+    if (wasTruncated) {
       nodes = nodes.slice(0, maxNodes);
     }
+
+    // Calculate hidden items per parent directory
+    const hiddenItemsMap = new Map<string, { count: number; totalSize: number }>();
+
+    // For each parent in the visible tree, count hidden children
+    root.descendants().forEach((parent) => {
+      if (!parent.children || parent.children.length === 0) return;
+
+      const hiddenChildren = parent.children.filter((child) => {
+        const isTooSmall = (child.value || 0) < minSize;
+        const isTooDeep = child.depth > maxDepth;
+        const isNotInVisibleNodes = !nodes.some((n) => n === child);
+        return isTooSmall || isTooDeep || isNotInVisibleNodes;
+      });
+
+      if (hiddenChildren.length > 0) {
+        const hiddenSize = hiddenChildren.reduce((sum, child) => sum + (child.value || 0), 0);
+        hiddenItemsMap.set(parent.data.path, {
+          count: hiddenChildren.length,
+          totalSize: hiddenSize,
+        });
+      }
+    });
+
+    // Update state for tooltip usage
+    setHiddenItemsInfo(hiddenItemsMap);
 
     // Create cell groups
     const cell = g
@@ -191,6 +225,61 @@ export default function Treemap({
           text.text(textContent + '...');
         }
       });
+
+    // Add truncation indicators for directories with hidden items
+    cell
+      .filter((d) => {
+        // Only show for directories that have hidden items
+        const hiddenInfo = hiddenItemsMap.get(d.data.path);
+        if (!hiddenInfo) return false;
+
+        // Only show if cell is large enough
+        const width = d.x1 - d.x0;
+        const height = d.y1 - d.y0;
+        return width >= 120 && height >= 40;
+      })
+      .each(function (d) {
+        const hiddenInfo = hiddenItemsMap.get(d.data.path);
+        if (!hiddenInfo) return;
+
+        const cellGroup = d3.select(this);
+        const width = d.x1 - d.x0;
+        const height = d.y1 - d.y0;
+
+        // Calculate position for indicator (bottom-right corner)
+        const indicatorWidth = Math.min(100, width - 8);
+        const indicatorHeight = 20;
+        const x = width - indicatorWidth - 4;
+        const y = height - indicatorHeight - 4;
+
+        // Add background rectangle for indicator
+        cellGroup
+          .append('rect')
+          .attr('x', x)
+          .attr('y', y)
+          .attr('width', indicatorWidth)
+          .attr('height', indicatorHeight)
+          .attr('fill', 'rgba(0, 0, 0, 0.7)')
+          .attr('rx', 3)
+          .attr('stroke', 'rgba(255, 255, 255, 0.3)')
+          .attr('stroke-width', 1)
+          .style('pointer-events', 'none');
+
+        // Add text showing hidden count
+        const hiddenText = `+${hiddenInfo.count} more`;
+        cellGroup
+          .append('text')
+          .attr('x', x + indicatorWidth / 2)
+          .attr('y', y + indicatorHeight / 2 + 1)
+          .text(hiddenText)
+          .attr('fill', '#ffffff')
+          .attr('font-size', '10px')
+          .attr('font-weight', '500')
+          .attr('text-anchor', 'middle')
+          .attr('dominant-baseline', 'middle')
+          .style('pointer-events', 'none')
+          .style('text-shadow', '0 1px 2px rgba(0,0,0,0.8)');
+      });
   }, [data, dimensions, onNodeClick, maxDepth, minSizePercentage, maxNodes]);
 
   return (
@@ -223,6 +312,17 @@ export default function Treemap({
                 {hoveredNode.extension && (
                   <div className="text-blue-400">.{hoveredNode.extension}</div>
                 )}
+                {(() => {
+                  const hiddenInfo = hiddenItemsInfo.get(hoveredNode.path);
+                  if (hiddenInfo) {
+                    return (
+                      <div className="text-yellow-400 mt-2 pt-2 border-t border-white/10">
+                        +{hiddenInfo.count} hidden items ({formatBytes(hiddenInfo.totalSize)})
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
                 <div className="text-gray-400 text-xs truncate mt-1">{hoveredNode.path}</div>
               </div>
             </div>

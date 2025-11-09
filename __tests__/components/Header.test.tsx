@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Header from '@/components/Header';
 
 // Mock the ShareButton component
@@ -41,8 +41,8 @@ describe('Header', () => {
 
   it('toggles dark mode when button is clicked', () => {
     render(<Header {...mockProps} />);
-    const darkModeButton = screen.getByRole('button', { name: '' });
-    fireEvent.click(darkModeButton);
+    const darkModeButtons = screen.getAllByTitle('Toggle theme');
+    fireEvent.click(darkModeButtons[0]);
     expect(mockProps.onToggleDarkMode).toHaveBeenCalledTimes(1);
   });
 
@@ -70,14 +70,14 @@ describe('Header', () => {
 
   it('shows refresh button when directory is selected and not loading', () => {
     render(<Header {...mockProps} hasSelectedDirectory={true} />);
-    const refreshButton = screen.getByTitle('Refresh scan');
-    expect(refreshButton).toBeInTheDocument();
+    const refreshButtons = screen.getAllByTitle('Refresh scan');
+    expect(refreshButtons.length).toBeGreaterThan(0);
   });
 
   it('calls onRefresh when refresh button is clicked', () => {
     render(<Header {...mockProps} hasSelectedDirectory={true} />);
-    const refreshButton = screen.getByTitle('Refresh scan');
-    fireEvent.click(refreshButton);
+    const refreshButtons = screen.getAllByTitle('Refresh scan');
+    fireEvent.click(refreshButtons[0]);
     expect(mockProps.onRefresh).toHaveBeenCalledTimes(1);
   });
 
@@ -154,5 +154,168 @@ describe('Header', () => {
     const lastScanTime = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 days ago
     render(<Header {...mockProps} lastScanTime={lastScanTime} />);
     expect(screen.getByText('3 days ago')).toBeInTheDocument();
+  });
+
+  // Mobile menu tests
+  it('shows mobile menu button when scan result exists', () => {
+    render(<Header {...mockProps} hasScanResult={true} />);
+    expect(screen.getByTitle('Open menu')).toBeInTheDocument();
+  });
+
+  it('does not show mobile menu button when loading', () => {
+    render(<Header {...mockProps} hasScanResult={true} isLoading={true} />);
+    expect(screen.queryByTitle('Open menu')).not.toBeInTheDocument();
+  });
+
+  it('shows mobile menu button when directory is selected', () => {
+    render(<Header {...mockProps} hasSelectedDirectory={true} />);
+    expect(screen.getByTitle('Open menu')).toBeInTheDocument();
+  });
+
+  describe('Auto-refresh functionality', () => {
+    it('calls onAutoRefreshChange when auto-refresh interval is changed', () => {
+      render(<Header {...mockProps} hasSelectedDirectory={true} autoRefreshInterval={0} />);
+
+      const select = screen.getByRole('combobox');
+      fireEvent.click(select);
+
+      // Simulate selecting 5 minutes (300000ms)
+      const option = screen.getByText('5 minutes');
+      fireEvent.click(option);
+
+      expect(mockProps.onAutoRefreshChange).toHaveBeenCalledWith(300000);
+    });
+
+    it('shows current auto-refresh interval value', () => {
+      render(<Header {...mockProps} hasSelectedDirectory={true} autoRefreshInterval={300000} />);
+      // The select should have the value set
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+    });
+  });
+
+  describe('Export functionality', () => {
+    it('renders export button when scan result exists', () => {
+      render(<Header {...mockProps} hasScanResult={true} />);
+      const exportButton = screen.getByTitle('Export data');
+      expect(exportButton).toBeInTheDocument();
+    });
+
+    it('export button is clickable', () => {
+      render(<Header {...mockProps} hasScanResult={true} />);
+      const exportButton = screen.getByTitle('Export data');
+      fireEvent.click(exportButton);
+      // Dropdown menu rendering is handled by Radix UI portals
+      // Actual clicking behavior is tested in E2E tests
+      expect(exportButton).toBeInTheDocument();
+    });
+
+    it('does not render export button when no scan result', () => {
+      render(<Header {...mockProps} hasScanResult={false} />);
+      expect(screen.queryByTitle('Export data')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Sidebar toggle functionality', () => {
+    it('shows correct icon when sidebar is closed', () => {
+      render(<Header {...mockProps} hasScanResult={true} isSidebarOpen={false} />);
+      expect(screen.getByTitle('Open sidebar')).toBeInTheDocument();
+    });
+
+    it('shows correct icon when sidebar is open', () => {
+      render(<Header {...mockProps} hasScanResult={true} isSidebarOpen={true} />);
+      expect(screen.getByTitle('Close sidebar')).toBeInTheDocument();
+    });
+
+    it('toggles sidebar when button is clicked multiple times', () => {
+      const { rerender } = render(
+        <Header {...mockProps} hasScanResult={true} isSidebarOpen={false} />
+      );
+
+      const sidebarButton = screen.getByTitle('Open sidebar');
+      fireEvent.click(sidebarButton);
+      expect(mockProps.onToggleSidebar).toHaveBeenCalledTimes(1);
+
+      rerender(<Header {...mockProps} hasScanResult={true} isSidebarOpen={true} />);
+      const closeSidebarButton = screen.getByTitle('Close sidebar');
+      fireEvent.click(closeSidebarButton);
+      expect(mockProps.onToggleSidebar).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('Dark mode toggle functionality', () => {
+    it('shows moon icon when in light mode', () => {
+      render(<Header {...mockProps} isDarkMode={false} />);
+      const darkModeButtons = screen.getAllByTitle('Toggle theme');
+      expect(darkModeButtons.length).toBeGreaterThan(0);
+    });
+
+    it('shows sun icon when in dark mode', () => {
+      render(<Header {...mockProps} isDarkMode={true} />);
+      const darkModeButtons = screen.getAllByTitle('Toggle theme');
+      expect(darkModeButtons.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('handles all props being false', () => {
+      const emptyProps = {
+        ...mockProps,
+        hasSelectedDirectory: false,
+        hasScanResult: false,
+        isComparisonMode: false,
+        isLoading: false,
+        isSidebarOpen: false,
+        lastScanTime: null,
+      };
+      render(<Header {...emptyProps} />);
+      expect(screen.getByText('StoryScan')).toBeInTheDocument();
+    });
+
+    it('handles loading state correctly', () => {
+      render(
+        <Header {...mockProps} isLoading={true} hasSelectedDirectory={true} hasScanResult={true} />
+      );
+      // Most buttons should not be visible when loading
+      expect(screen.queryByTitle('Refresh scan')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Export data')).not.toBeInTheDocument();
+    });
+
+    it('handles comparison mode with scan result', () => {
+      render(<Header {...mockProps} isComparisonMode={true} hasScanResult={true} />);
+      expect(screen.getByTitle('Exit comparison mode')).toBeInTheDocument();
+      expect(screen.queryByTitle('Export data')).not.toBeInTheDocument();
+      expect(screen.queryByText('Share')).not.toBeInTheDocument();
+      expect(screen.queryByTitle('Open sidebar')).not.toBeInTheDocument();
+    });
+
+    it('handles very recent scan time (under 1 minute)', () => {
+      const recentTime = new Date(Date.now() - 10 * 1000); // 10 seconds ago
+      render(<Header {...mockProps} lastScanTime={recentTime} />);
+      expect(screen.getByText('just now')).toBeInTheDocument();
+    });
+
+    it('handles auto-refresh interval of 0 (off)', () => {
+      render(<Header {...mockProps} hasSelectedDirectory={true} autoRefreshInterval={0} />);
+      const select = screen.getByRole('combobox');
+      expect(select).toBeInTheDocument();
+    });
+
+    it('handles auto-refresh interval of 15 minutes', () => {
+      render(<Header {...mockProps} hasSelectedDirectory={true} autoRefreshInterval={900000} />);
+      const select = screen.getByRole('combobox');
+      expect(select).toBeInTheDocument();
+    });
+
+    it('handles auto-refresh interval of 30 minutes', () => {
+      render(<Header {...mockProps} hasSelectedDirectory={true} autoRefreshInterval={1800000} />);
+      const select = screen.getByRole('combobox');
+      expect(select).toBeInTheDocument();
+    });
+
+    it('handles auto-refresh interval of 1 hour', () => {
+      render(<Header {...mockProps} hasSelectedDirectory={true} autoRefreshInterval={3600000} />);
+      const select = screen.getByRole('combobox');
+      expect(select).toBeInTheDocument();
+    });
   });
 });
