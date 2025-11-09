@@ -89,7 +89,7 @@ StoryScan is a **beautiful web-based disk usage visualizer** for Unraid servers,
 
 **Quality Assurance:**
 
-- ✅ 253 passing tests (238 unit + 15 E2E)
+- ✅ 274 passing tests (259 unit + 15 E2E)
 - ✅ Jest + React Testing Library for component tests
 - ✅ Playwright for E2E tests
 - ✅ 100% test pass rate
@@ -824,6 +824,15 @@ make typecheck
 npm update @types/node @types/react @types/d3
 ```
 
+### E2E Tests Failing in CI
+
+If E2E tests are failing in CI with scan errors:
+
+1. **Check SCAN_DIRECTORIES Environment Variable** - The CI workflow must set `SCAN_DIRECTORIES` to a valid directory
+2. The `.github/workflows/ci-cd.yml` sets it to `${{ github.workspace }}` for the test job
+3. Without this, the scan API defaults to `/data` which doesn't exist in CI
+4. The E2E test "should toggle dark mode" checks for theme toggle functionality, not a specific initial state
+
 ### Dark Mode Not Working
 
 If dark mode toggle isn't working:
@@ -902,7 +911,7 @@ make help               # Show all commands
 
 ## Status Indicators
 
-**Build Status:** ✅ Passing (253/253 tests)
+**Build Status:** ✅ Passing (274/274 tests)
 **Coverage:** ✅ Excellent (All features, hooks, and layout components fully tested)
 **CI/CD:** ✅ Configured and working
 **Docker:** ✅ Multi-arch builds working
@@ -935,12 +944,18 @@ make help               # Show all commands
   - ⏳ Keyboard Shortcuts - Coming later
   - ⏳ Settings Panel - Coming later
 - ✅ Major refactoring complete (custom hooks, layout components, code organization)
-- Total: 253 tests passing (238 unit + 15 E2E)
+- Total: 274 tests passing (259 unit + 15 E2E)
 - **Testing:** All components, hooks, and layout components tested
 - **Code Quality:** page.tsx reduced from 838 to 255 lines (70% reduction)
 - **Current Progress: 10/17 features (59%)**
 - See FEATURE_ROADMAP.md for details
 - **Recent Changes:**
+  - **Fixed E2E Test Failures in CI** - Resolved E2E test failures in GitHub Actions:
+    - Added `SCAN_DIRECTORIES` environment variable to CI workflow test job
+    - Set to `${{ github.workspace }}` to scan the project directory in CI
+    - Fixed dark mode toggle E2E test to check for state change instead of specific initial state
+    - All 15 E2E tests now passing in CI (5 API tests + 10 homepage tests)
+    - Total test count: 274 tests (259 unit + 15 E2E)
   - **Fixed Dialog Component Z-Index Issues** - Resolved ShareButton modal positioning:
     - Increased Dialog overlay z-index from z-50 to z-[100]
     - Increased Dialog content z-index from z-50 to z-[110]

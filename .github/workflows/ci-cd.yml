@@ -63,6 +63,8 @@ jobs:
         run: npm test
 
       - name: Run E2E tests
+        env:
+          SCAN_DIRECTORIES: ${{ github.workspace }}
         run: |
           npx playwright install --with-deps chromium
           npm run test:e2e

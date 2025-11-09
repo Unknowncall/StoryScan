@@ -24,10 +24,11 @@ test.describe('StoryScan Homepage', () => {
   test('should toggle dark mode when button is clicked', async ({ page }) => {
     const html = page.locator('html');
 
-    // Check initial state (should be dark mode by default)
-    await expect(html).toHaveClass(/dark/);
+    // Get initial state (could be dark or light depending on system preference)
+    const initialClasses = await html.getAttribute('class');
+    const initiallyDark = initialClasses?.includes('dark') ?? false;
 
-    // Click the last button in header (theme toggle)
+    // Click the theme toggle button
     const buttons = page.locator('header button');
     const toggleButton = buttons.last();
     await toggleButton.click();
@@ -35,9 +36,12 @@ test.describe('StoryScan Homepage', () => {
     // Wait for the class to update
     await page.waitForTimeout(200);
 
-    // Check that dark class state changed (we just verify the button is clickable)
-    // The actual dark/light toggle depends on initial state
-    await expect(toggleButton).toBeVisible();
+    // Check that dark class state changed
+    const newClasses = await html.getAttribute('class');
+    const nowDark = newClasses?.includes('dark') ?? false;
+
+    // Verify the state toggled
+    expect(nowDark).not.toBe(initiallyDark);
   });
 
   test('should display directory selector', async ({ page }) => {
