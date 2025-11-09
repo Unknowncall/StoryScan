@@ -824,6 +824,15 @@ make typecheck
 npm update @types/node @types/react @types/d3
 ```
 
+### Next.js Build Error (useSearchParams)
+
+If you get the error "useSearchParams() should be wrapped in a suspense boundary":
+
+1. **Wrap in Suspense** - Any component using `useSearchParams()` must be wrapped in a `<Suspense>` boundary
+2. In `app/page.tsx`, the `HomeContent` component is wrapped in `<Suspense fallback={<Loading />}>`
+3. This allows Next.js to properly handle static generation and client-side search params
+4. The Suspense fallback shows the loading spinner while the component hydrates
+
 ### E2E Tests Failing in CI
 
 If E2E tests are failing in CI with scan errors:
@@ -950,6 +959,12 @@ make help               # Show all commands
 - **Current Progress: 10/17 features (59%)**
 - See FEATURE_ROADMAP.md for details
 - **Recent Changes:**
+  - **Fixed Next.js Build Error (Suspense Boundary)** - Resolved Docker build failure:
+    - Wrapped HomeContent component in Suspense boundary
+    - Fixed "useSearchParams() should be wrapped in a suspense boundary" error
+    - Added Suspense import to page.tsx
+    - Build now completes successfully in Docker/CI
+    - All 259 unit tests still passing
   - **Fixed E2E Test Failures in CI** - Resolved E2E test failures in GitHub Actions:
     - Added `SCAN_DIRECTORIES` environment variable to CI workflow test job
     - Set to `${{ github.workspace }}` to scan the project directory in CI

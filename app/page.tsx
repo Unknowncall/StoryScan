@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { toast } from 'sonner';
 import { AppProvider } from '@/contexts/AppProvider';
 import { useScan } from '@/contexts/ScanContext';
@@ -205,7 +205,9 @@ function HomeContent() {
 export default function Home() {
   return (
     <AppProvider>
-      <HomeContent />
+      <Suspense fallback={<Loading />}>
+        <HomeContent />
+      </Suspense>
     </AppProvider>
   );
 }
