@@ -132,8 +132,9 @@ export default function Treemap({
     } else if (filteringTier === 'moderate') {
       // Tier 3: Moderate filtering
       // Keep items that are either:
-      // - At least 0.5% of their parent, OR
-      // - In the top 50% of items per directory
+      // - At least 0.05% of their parent (much more lenient), OR
+      // - In the top 80% of items per directory (much more lenient), OR
+      // - At least 0.005% of total size (safety net)
       const parentChildrenMap = new Map<string, typeof root.children>();
       root.descendants().forEach((node) => {
         if (node.children && node.children.length > 0) {
@@ -145,23 +146,28 @@ export default function Treemap({
       parentChildrenMap.forEach((children) => {
         if (!children) return;
         const sortedChildren = [...children].sort((a, b) => (b.value || 0) - (a.value || 0));
-        const topN = Math.max(Math.ceil(children.length * 0.5), 10); // Keep top 50%, min 10
+        const topN = Math.max(Math.ceil(children.length * 0.8), 20); // Keep top 80%, min 20
         sortedChildren.slice(0, topN).forEach((child) => {
           topNPerDirectorySet.add(child.data.path);
         });
       });
 
+      const tinyItemThreshold = totalSize * 0.00005; // 0.005% of total
+
       nodes = allDescendants.filter((d) => {
         const nodeSize = d.value || 0;
 
-        // Check if at least 0.5% of parent
+        // Strategy 1: At least 0.05% of parent (was 0.5%)
         if (d.parent && d.parent.value) {
           const percentOfParent = (nodeSize / d.parent.value) * 100;
-          if (percentOfParent >= 0.5) return true;
+          if (percentOfParent >= 0.05) return true;
         }
 
-        // Check if in top N for this directory
+        // Strategy 2: In top 80% for this directory (was 50%)
         if (topNPerDirectorySet.has(d.data.path)) return true;
+
+        // Strategy 3: At least 0.005% of total (safety net)
+        if (nodeSize >= tinyItemThreshold) return true;
 
         return false;
       });
