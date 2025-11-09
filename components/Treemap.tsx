@@ -25,8 +25,8 @@ export default function Treemap({
   data,
   onNodeClick,
   maxDepth = 5,
-  minSizePercentage = 0.05, // Increased to filter out tiny items
-  maxNodes = 1500, // Reduced for better performance
+  minSizePercentage = 0.001, // Global safety net (very permissive)
+  maxNodes = 3000, // Max nodes to render (safety ceiling)
 }: TreemapProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -74,45 +74,93 @@ export default function Treemap({
 
     const g = svg.append('g');
 
-    // Performance optimization: filter nodes by depth, size, and count
+    // Adaptive filtering strategy
     const totalSize = root.value || 1;
-    const minSize = (totalSize * minSizePercentage) / 100;
 
-    // Get all descendants and filter them
+    // Strategy 1: Dynamic absolute minimum (scales with dataset size)
+    const dynamicAbsoluteMin = totalSize * 0.0001; // 0.01% of total
+
+    // Strategy 2: Global safety net (very permissive)
+    const globalMinSize = (totalSize * minSizePercentage) / 100;
+
+    // Build a map of parent -> children for per-directory filtering
+    const parentChildrenMap = new Map<string, typeof root.children>();
+    root.descendants().forEach((node) => {
+      if (node.children && node.children.length > 0) {
+        parentChildrenMap.set(node.data.path, node.children);
+      }
+    });
+
+    // Helper function: Calculate top N using logarithmic scale
+    const getTopN = (totalChildren: number): number => {
+      // Show more items when there are fewer, less when there are many
+      // Formula: percentage decreases logarithmically as count increases
+      const percentage = Math.max(0.05, 0.3 - Math.log10(totalChildren) * 0.1); // 30% to 5%
+      const calculated = Math.ceil(totalChildren * percentage);
+      // Apply floor (min 20) and ceiling (max 2000)
+      return Math.min(Math.max(calculated, 20), 2000);
+    };
+
+    // Build a set of nodes that should be visible based on "top N per directory"
+    const topNPerDirectorySet = new Set<string>();
+    parentChildrenMap.forEach((children) => {
+      if (!children) return;
+      const sortedChildren = [...children].sort((a, b) => (b.value || 0) - (a.value || 0));
+      const topN = getTopN(children.length);
+      sortedChildren.slice(0, topN).forEach((child) => {
+        topNPerDirectorySet.add(child.data.path);
+      });
+    });
+
+    // Get all descendants and filter using hybrid strategy
     let nodes = root
       .descendants()
       .filter((d) => {
         // Skip root node
         if (d.depth === 0) return false;
+
         // Limit depth
         if (d.depth > maxDepth) return false;
-        // Filter by minimum size
-        if ((d.value || 0) < minSize) return false;
-        return true;
+
+        const nodeSize = d.value || 0;
+
+        // Strategy 1: Dynamic absolute minimum (e.g., 5GB for 51TB dataset)
+        if (nodeSize >= dynamicAbsoluteMin) return true;
+
+        // Strategy 2: Relative to parent (at least 1% of parent)
+        if (d.parent && d.parent.value) {
+          const percentOfParent = (nodeSize / d.parent.value) * 100;
+          if (percentOfParent >= 1.0) return true;
+        }
+
+        // Strategy 3: Top N per directory (logarithmic scale)
+        if (topNPerDirectorySet.has(d.data.path)) return true;
+
+        // Strategy 4: Global safety net (very permissive)
+        if (nodeSize >= globalMinSize) return true;
+
+        return false;
       })
       .sort((a, b) => (b.value || 0) - (a.value || 0));
 
-    // Track which nodes were truncated
-    const totalNodesBeforeTruncation = nodes.length;
+    // Apply hard ceiling for performance (safety net)
     const wasTruncated = nodes.length > maxNodes;
-
-    // Limit total number of nodes for performance
     if (wasTruncated) {
       nodes = nodes.slice(0, maxNodes);
     }
 
     // Calculate hidden items per parent directory
     const hiddenItemsMap = new Map<string, { count: number; totalSize: number }>();
+    const visiblePathSet = new Set(nodes.map((n) => n.data.path));
 
     // For each parent in the visible tree, count hidden children
     root.descendants().forEach((parent) => {
       if (!parent.children || parent.children.length === 0) return;
 
       const hiddenChildren = parent.children.filter((child) => {
-        const isTooSmall = (child.value || 0) < minSize;
         const isTooDeep = child.depth > maxDepth;
-        const isNotInVisibleNodes = !nodes.some((n) => n === child);
-        return isTooSmall || isTooDeep || isNotInVisibleNodes;
+        const isNotInVisibleNodes = !visiblePathSet.has(child.data.path);
+        return isTooDeep || isNotInVisibleNodes;
       });
 
       if (hiddenChildren.length > 0) {
@@ -178,7 +226,7 @@ export default function Treemap({
       .on('mousemove', function (event) {
         setMousePos({ x: event.clientX, y: event.clientY });
       })
-      .on('mouseleave', function (event, d) {
+      .on('mouseleave', function (_event, d) {
         const width = d.x1 - d.x0;
         const height = d.y1 - d.y0;
         d3.select(this)

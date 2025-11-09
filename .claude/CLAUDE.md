@@ -80,8 +80,12 @@ StoryScan is a **beautiful web-based disk usage visualizer** for Unraid servers,
 **Performance Optimizations:**
 
 - ✅ Depth limiting (max 5 levels)
-- ✅ Size filtering (min 0.05% of total)
-- ✅ Node count limiting (max 1500 items)
+- ✅ **Adaptive hybrid filtering** - Multi-strategy approach that scales with dataset:
+  - Dynamic absolute minimum (0.01% of total size, e.g., ~5GB for 51TB)
+  - Relative to parent (≥1% of parent directory)
+  - Logarithmic top N per directory (30% for small dirs → 5% for large dirs)
+  - Global safety net (0.001% of total)
+- ✅ Node count ceiling (max 3000 items for performance)
 - ✅ Smart label rendering (only on cells large enough)
 - ✅ Adaptive borders and styling for small items
 - ✅ Debounced search (300ms)
@@ -642,19 +646,47 @@ See `FEATURE_ROADMAP.md` for complete details.
 
 ### Performance Optimization
 
-Current optimization parameters (can be adjusted):
+**Adaptive Hybrid Filtering Strategy:**
 
-- `maxDepth`: 5 levels
-- `minSizePercentage`: 0.05% (optimized to filter tiny items while maintaining detail)
-- `maxNodes`: 1500 items (balanced for performance and visual quality)
+The treemap uses a sophisticated multi-strategy filtering approach that automatically adapts to different dataset sizes and directory structures.
 
-Located in: `components/Treemap.tsx:27-29`
+Located in: `components/Treemap.tsx:77-149`
 
-**Key features:**
+**Filtering Strategies (show item if ANY criterion is met):**
 
-1. **Smart filtering:** Filters nodes by depth, size, and count to prevent visual clutter and maintain performance
-2. **Truncation indicators:** When items are hidden due to size/depth filtering, a visual indicator appears in the bottom-right corner of the parent directory showing "+X more" items. This helps users understand when data is being filtered.
-3. **Enhanced tooltips:** Tooltips now show hidden item counts and their total size for directories with filtered children.
+1. **Dynamic Absolute Minimum** - Scales with total dataset size
+   - Formula: `totalSize * 0.0001` (0.01% of total)
+   - Example: 51TB dataset → ~5GB minimum, 500MB dataset → ~500KB minimum
+   - Ensures significant files are always visible regardless of context
+
+2. **Relative to Parent** - Percentage of parent directory
+   - Threshold: ≥1% of parent directory size
+   - Ensures locally significant files are visible even if globally small
+   - Example: A 5GB file in a 100GB folder is shown (5% of parent)
+
+3. **Logarithmic Top N Per Directory** - Adaptive per-directory limits
+   - Formula: `percentage = max(5%, 30% - log10(childCount) * 10%)`
+   - Small directories (50 items): Show ~30% (15 items)
+   - Medium directories (500 items): Show ~12% (60 items)
+   - Large directories (20,000 items): Show ~5% (1,000 items)
+   - Floor: minimum 20 items, Ceiling: maximum 2,000 items
+   - Prevents both empty-looking directories and performance issues
+
+4. **Global Safety Net** - Very permissive fallback
+   - Threshold: 0.001% of total size
+   - Catches edge cases and ensures minimum visibility
+
+**Performance Parameters:**
+
+- `maxDepth`: 5 levels (prevents excessive nesting)
+- `minSizePercentage`: 0.001% (global safety net, very permissive)
+- `maxNodes`: 3000 items (hard ceiling for browser performance)
+
+**Additional Features:**
+
+1. **Truncation indicators:** When items are hidden, a visual indicator shows "+X more" items with total size
+2. **Enhanced tooltips:** Display hidden item counts and their total size for directories
+3. **Smart label rendering:** Only render text labels on cells large enough to display them (≥60px width, ≥20px height)
 
 ---
 
@@ -982,6 +1014,17 @@ make help               # Show all commands
 - **Current Progress: 10/17 features (59%)**
 - See FEATURE_ROADMAP.md for details
 - **Recent Changes:**
+  - **Adaptive Hybrid Filtering (Session 4)** - Implemented fully adaptive multi-strategy filtering:
+    - Replaced static filtering with intelligent hybrid approach that adapts to dataset size and structure
+    - 4 filtering strategies (show item if ANY is met):
+      1. Dynamic absolute minimum: 0.01% of total (e.g., ~5GB for 51TB dataset)
+      2. Relative to parent: ≥1% of parent directory
+      3. Logarithmic top N per directory: 30% for small dirs → 5% for large dirs
+      4. Global safety net: 0.001% of total
+    - Solves issue where 51TB dataset showed no files in Movies folder (was filtering 19k items)
+    - Parameters updated: minSizePercentage 0.05% → 0.001%, maxNodes 1500 → 3000
+    - All 440 unit tests passing (no test changes required)
+    - Treemap.tsx lines 77-149 contain new filtering logic
   - **Performance Fix (Session 3)** - Resolved visual degradation and lag issues:
     - Fixed treemap rendering showing too many tiny scattered rectangles
     - Reverted performance parameters to optimal values:
