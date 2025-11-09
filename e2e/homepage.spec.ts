@@ -28,9 +28,8 @@ test.describe('StoryScan Homepage', () => {
     const initialClasses = await html.getAttribute('class');
     const initiallyDark = initialClasses?.includes('dark') ?? false;
 
-    // Click the theme toggle button
-    const buttons = page.locator('header button');
-    const toggleButton = buttons.last();
+    // Click the theme toggle button - use title selector to avoid mobile/desktop duplication
+    const toggleButton = page.locator('button[title="Toggle theme"]').first();
     await toggleButton.click();
 
     // Wait for the class to update
@@ -90,8 +89,8 @@ test.describe('StoryScan Homepage', () => {
     // Wait for initial scan
     await page.waitForTimeout(2000);
 
-    // Look for refresh button
-    const refreshButton = page.locator('button[title="Refresh scan"]');
+    // Look for refresh button - use .first() since there are desktop and mobile versions
+    const refreshButton = page.locator('button[title="Refresh scan"]').first();
     await expect(refreshButton).toBeVisible();
   });
 });
