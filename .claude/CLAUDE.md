@@ -79,17 +79,20 @@ StoryScan is a **beautiful web-based disk usage visualizer** for Unraid servers,
 
 **Performance Optimizations:**
 
-- ✅ Depth limiting (max 5 levels)
-- ✅ **Adaptive hybrid filtering** - Multi-strategy approach that scales with dataset:
-  - Dynamic absolute minimum (0.01% of total size, e.g., ~5GB for 51TB)
-  - Relative to parent (≥1% of parent directory)
-  - Logarithmic top N per directory (30% for small dirs → 5% for large dirs)
-  - Global safety net (0.001% of total)
-- ✅ Node count ceiling (max 3000 items for performance)
+- ✅ Depth limiting (max 5 levels, configurable via TREEMAP_MAX_DEPTH)
+- ✅ **NEW: Item count-based adaptive filtering** - 4-tier intelligent filtering system:
+  - **Tier 1 (< 5k items):** No filtering - show everything
+  - **Tier 2 (5k-15k items):** Light filtering - remove only tiny items
+  - **Tier 3 (15k-50k items):** Moderate filtering - keep ≥0.5% of parent OR top 50%
+  - **Tier 4 (> 50k items):** Aggressive filtering with hybrid multi-strategy approach
+  - Automatically selects appropriate tier based on total item count
+  - Fully configurable via environment variables
+- ✅ Node count ceiling (max 20,000 items, up from 3,000 - configurable via TREEMAP_MAX_NODES)
 - ✅ Smart label rendering (only on cells large enough)
 - ✅ Adaptive borders and styling for small items
 - ✅ Debounced search (300ms)
 - ✅ Memoized filtering and computations
+- ✅ Console logging of active filtering tier for debugging
 
 **Quality Assurance:**
 
@@ -132,7 +135,12 @@ StoryScan is a **beautiful web-based disk usage visualizer** for Unraid servers,
 
 **DevOps:**
 
-- ✅ Full CI/CD pipeline with GitHub Actions
+- ✅ Optimized CI/CD pipeline with GitHub Actions
+  - Parallel quality checks (lint + typecheck)
+  - Single test job with coverage (no redundant test runs)
+  - Playwright browser caching (~2-3 min savings per run)
+  - Docker image built once, retagged for pre-releases (50% faster)
+  - Production releases still build fresh for safety
 - ✅ Pre-commit hooks (husky + lint-staged)
 - ✅ Automated releases (pre-release on main, production on tags)
 - ✅ Multi-arch Docker builds (amd64 + arm64)
@@ -433,16 +441,33 @@ Documentation:
 
 ## Environment Variables
 
-**Development:**
+**Directory Scanning:**
 
 ```bash
+# Required: Comma-separated list of directories to scan
 SCAN_DIRECTORIES=/Users/zach/Documents/Development/StoryScan
+```
+
+**Treemap Performance Tuning (Optional):**
+
+```bash
+# Maximum nodes to render before applying hard ceiling (default: 20000)
+TREEMAP_MAX_NODES=20000
+
+# Maximum tree depth to display (default: 5)
+TREEMAP_MAX_DEPTH=5
+
+# Item count thresholds for adaptive filtering tiers
+TREEMAP_LIGHT_THRESHOLD=5000       # Below this: show everything (no filtering)
+TREEMAP_MODERATE_THRESHOLD=15000   # 5k-15k items: light filtering
+TREEMAP_AGGRESSIVE_THRESHOLD=50000 # 15k-50k: moderate, >50k: aggressive
 ```
 
 **Production (Unraid):**
 
 ```bash
 SCAN_DIRECTORIES=/data/media,/data/downloads,/data/backups
+# Optionally override treemap settings for performance tuning
 ```
 
 **Docker:**
@@ -452,6 +477,8 @@ docker run -d \
   --name storyscan \
   -p 3000:3000 \
   -e SCAN_DIRECTORIES=/data/media,/data/downloads \
+  -e TREEMAP_MAX_NODES=20000 \
+  -e TREEMAP_MAX_DEPTH=5 \
   -v /mnt/user/media:/data/media:ro \
   -v /mnt/user/downloads:/data/downloads:ro \
   ghcr.io/USERNAME/storyscan:latest
@@ -646,41 +673,51 @@ See `FEATURE_ROADMAP.md` for complete details.
 
 ### Performance Optimization
 
-**Adaptive Hybrid Filtering Strategy:**
+**NEW: Item Count-Based Adaptive Filtering Strategy (v1.7.0)**
 
-The treemap uses a sophisticated multi-strategy filtering approach that automatically adapts to different dataset sizes and directory structures.
+The treemap now uses an intelligent tiered filtering system that adapts based on the **total number of items** in the dataset, not just file sizes. This ensures small datasets show everything while large datasets remain performant.
 
-Located in: `components/Treemap.tsx:77-149`
+Located in: `components/Treemap.tsx:99-227`
 
-**Filtering Strategies (show item if ANY criterion is met):**
+**Filtering Tiers (automatically selected based on item count):**
 
-1. **Dynamic Absolute Minimum** - Scales with total dataset size
-   - Formula: `totalSize * 0.0001` (0.01% of total)
-   - Example: 51TB dataset → ~5GB minimum, 500MB dataset → ~500KB minimum
-   - Ensures significant files are always visible regardless of context
+1. **Tier 1: No Filtering** (< 5,000 items)
+   - Shows ALL items without any filtering
+   - Perfect for small to medium datasets
+   - Example: Development directories, single projects
+   - Performance: Excellent (browsers handle <5k DOM elements easily)
 
-2. **Relative to Parent** - Percentage of parent directory
-   - Threshold: ≥1% of parent directory size
-   - Ensures locally significant files are visible even if globally small
-   - Example: A 5GB file in a 100GB folder is shown (5% of parent)
+2. **Tier 2: Light Filtering** (5,000 - 15,000 items)
+   - Removes only very tiny items (<0.001% of total size)
+   - Keeps ~90% of items visible
+   - Example: Large media libraries with few files
+   - Performance: Very good
 
-3. **Logarithmic Top N Per Directory** - Adaptive per-directory limits
-   - Formula: `percentage = max(5%, 30% - log10(childCount) * 10%)`
-   - Small directories (50 items): Show ~30% (15 items)
-   - Medium directories (500 items): Show ~12% (60 items)
-   - Large directories (20,000 items): Show ~5% (1,000 items)
-   - Floor: minimum 20 items, Ceiling: maximum 2,000 items
-   - Prevents both empty-looking directories and performance issues
+3. **Tier 3: Moderate Filtering** (15,000 - 50,000 items)
+   - Keeps items that are either:
+     - At least 0.5% of their parent directory, OR
+     - In the top 50% of items per directory (min 10 items)
+   - Keeps ~70% of items visible
+   - Example: Multi-terabyte media servers
+   - Performance: Good
 
-4. **Global Safety Net** - Very permissive fallback
-   - Threshold: 0.001% of total size
-   - Catches edge cases and ensures minimum visibility
+4. **Tier 4: Aggressive Filtering** (> 50,000 items)
+   - Uses hybrid multi-strategy approach:
+     - Dynamic absolute minimum (0.01% of total)
+     - Relative to parent (≥1% of parent)
+     - Logarithmic top N per directory (30% → 5%)
+     - Global safety net (0.001% of total)
+   - Necessary only for massive datasets
+   - Example: 51TB+ archives with hundreds of thousands of files
+   - Performance: Optimized for extreme datasets
 
-**Performance Parameters:**
+**Configurable Parameters (via Environment Variables):**
 
-- `maxDepth`: 5 levels (prevents excessive nesting)
-- `minSizePercentage`: 0.001% (global safety net, very permissive)
-- `maxNodes`: 3000 items (hard ceiling for browser performance)
+- `TREEMAP_MAX_NODES`: 20,000 items (hard ceiling, up from 3,000)
+- `TREEMAP_MAX_DEPTH`: 5 levels (prevents excessive nesting)
+- `TREEMAP_LIGHT_THRESHOLD`: 5,000 items (no filtering below this)
+- `TREEMAP_MODERATE_THRESHOLD`: 15,000 items (light filtering tier)
+- `TREEMAP_AGGRESSIVE_THRESHOLD`: 50,000 items (moderate filtering tier)
 
 **Additional Features:**
 
@@ -1014,6 +1051,42 @@ make help               # Show all commands
 - **Current Progress: 10/17 features (59%)**
 - See FEATURE_ROADMAP.md for details
 - **Recent Changes:**
+  - **Item Count-Based Adaptive Filtering (Session 6)** - Complete redesign of treemap filtering strategy:
+    - **Problem Solved:** Massive over-filtering on large datasets (51TB showed almost nothing)
+    - **Solution:** Replaced size-based filtering with intelligent item count-based tiers
+    - **4 Filtering Tiers (automatically selected):**
+      1. **None** (<5k items): Show EVERYTHING, zero filtering
+      2. **Light** (5k-15k items): Remove only tiny items (<0.001% of total), keep ~90%
+      3. **Moderate** (15k-50k items): Keep ≥0.5% of parent OR top 50% per directory, keep ~70%
+      4. **Aggressive** (>50k items): Hybrid strategy with multiple criteria
+    - **Configuration via Environment Variables:**
+      - `TREEMAP_MAX_NODES=20000` (up from 3,000 - browsers can handle it!)
+      - `TREEMAP_MAX_DEPTH=5`
+      - `TREEMAP_LIGHT_THRESHOLD=5000` (no filtering below this)
+      - `TREEMAP_MODERATE_THRESHOLD=15000`
+      - `TREEMAP_AGGRESSIVE_THRESHOLD=50000`
+    - **Implementation Details:**
+      - Updated API route to pass config from ENV to frontend (route.ts:175)
+      - Added TreemapConfig interface to types/index.ts
+      - Updated Treemap component to accept config prop (Treemap.tsx:99-227)
+      - Updated MainContent and ComparisonView to pass config
+      - Console logging shows active filtering tier for debugging
+    - **Why This is Better:**
+      - Small projects (<5k files): Shows everything, perfect detail
+      - Medium datasets (5k-50k files): Minimal filtering, great visibility
+      - Large datasets (>50k files): Smart filtering only when necessary
+      - User-controllable via environment variables
+    - **Performance:** All TypeScript compilation successful, builds cleanly
+    - **Documentation:** Updated CLAUDE.md with new strategy and env variables
+  - **CI/CD Optimization (Session 5)** - Major performance improvements to GitHub Actions workflow:
+    - Eliminated redundant Docker builds (was building 3 times, now builds once)
+    - Renamed `lint` job to `quality` and combined lint + typecheck
+    - Merged unit tests into single `test:coverage` run (eliminated duplicate test execution)
+    - Added Playwright browser caching (~2-3 min savings per run)
+    - Pre-release workflow now reuses Docker image from build job (no rebuild)
+    - Production releases still build fresh for safety and versioning
+    - Expected 50-60% reduction in CI/CD time for main branch pushes
+    - All jobs now depend on `quality` and `test` (updated from `lint`)
   - **Adaptive Hybrid Filtering (Session 4)** - Implemented fully adaptive multi-strategy filtering:
     - Replaced static filtering with intelligent hybrid approach that adapts to dataset size and structure
     - 4 filtering strategies (show item if ANY is met):

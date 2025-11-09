@@ -26,6 +26,17 @@ function getConfiguredDirectories(): string[] {
     .filter((d) => d.length > 0);
 }
 
+// Get treemap configuration from environment variables
+function getTreemapConfig() {
+  return {
+    maxNodes: parseInt(process.env.TREEMAP_MAX_NODES || '20000', 10),
+    maxDepth: parseInt(process.env.TREEMAP_MAX_DEPTH || '5', 10),
+    lightThreshold: parseInt(process.env.TREEMAP_LIGHT_THRESHOLD || '5000', 10),
+    moderateThreshold: parseInt(process.env.TREEMAP_MODERATE_THRESHOLD || '15000', 10),
+    aggressiveThreshold: parseInt(process.env.TREEMAP_AGGRESSIVE_THRESHOLD || '50000', 10),
+  };
+}
+
 async function getDirectorySize(dirPath: string): Promise<FileNode> {
   const stats = await fs.stat(dirPath);
   const name = path.basename(dirPath);
@@ -161,6 +172,7 @@ export async function GET(request: NextRequest) {
       root: result,
       totalSize: result.size,
       scannedAt: new Date().toISOString(),
+      treemapConfig: getTreemapConfig(),
     });
   } catch (error) {
     logger.error(`❌ Error scanning directory:`, error);

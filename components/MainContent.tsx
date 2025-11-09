@@ -98,7 +98,11 @@ export default function MainContent() {
         <CardContent className="p-6">
           <div className="h-[600px]">
             {viewMode === 'treemap' && (
-              <Treemap data={filteredNode || currentNode} onNodeClick={handleNodeClick} />
+              <Treemap
+                data={filteredNode || currentNode}
+                onNodeClick={handleNodeClick}
+                config={scanResult.treemapConfig}
+              />
             )}
             {viewMode === 'tree' && (
               <TreeView data={filteredNode || currentNode} onItemClick={handleNodeClick} />

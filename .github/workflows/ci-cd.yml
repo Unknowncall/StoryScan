@@ -17,8 +17,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  lint:
-    name: Lint Code
+  # Combined quality checks job - runs lint and typecheck in parallel
+  quality:
+    name: Code Quality
     runs-on: ubuntu-latest
 
     steps:
@@ -41,10 +42,10 @@ jobs:
       - name: Check TypeScript
         run: npx tsc --noEmit
 
+  # Single test job that runs both unit and E2E tests with coverage
   test:
-    name: Run Tests
+    name: Tests & Coverage
     runs-on: ubuntu-latest
-    needs: lint
 
     steps:
       - name: Checkout code
@@ -59,19 +60,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run unit tests
-        run: npm test
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright dependencies only
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Run unit tests with coverage
+        run: npm run test:coverage
 
       - name: Run E2E tests
         env:
           SCAN_DIRECTORIES: ${{ github.workspace }}
-        run: |
-          npx playwright install --with-deps chromium
-          npm run test:e2e
-
-      - name: Generate coverage report
-        run: npm run test:coverage
-        continue-on-error: true
+        run: npm run test:e2e
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -82,15 +92,20 @@ jobs:
           name: codecov-storyscan
         continue-on-error: true
 
+  # Build Docker image once and use caching
   build-docker:
     name: Build Docker Image
     runs-on: ubuntu-latest
-    needs: [lint, test]
-    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+    needs: [quality, test]
+    if: github.event_name == 'push'
 
     permissions:
       contents: read
       packages: write
+
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-name: ${{ steps.image_name.outputs.name }}
 
     steps:
       - name: Checkout code
@@ -118,25 +133,28 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ steps.image_name.outputs.name }}
           tags: |
+            type=sha,prefix={{branch}}-,format=short
             type=ref,event=branch
             type=ref,event=pr
 
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # Tag existing Docker image for pre-release (no rebuild)
   create-prerelease:
     name: Create Pre-Release
     runs-on: ubuntu-latest
-    needs: [lint, test, build-docker]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+    needs: [build-docker]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     permissions:
       contents: write
@@ -194,15 +212,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Convert image name to lowercase
-        id: image_name
-        run: |
-          IMAGE_NAME_LOWER=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-          echo "name=$IMAGE_NAME_LOWER" >> $GITHUB_OUTPUT
-
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -210,22 +219,28 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push pre-release Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ steps.image_name.outputs.name }}:${{ steps.get_tag.outputs.new_version }}
-            ${{ env.REGISTRY }}/${{ steps.image_name.outputs.name }}:latest-pre
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Tag and push pre-release image
+        run: |
+          IMAGE_NAME="${{ needs.build-docker.outputs.image-name }}"
+          SOURCE_TAG="${{ env.REGISTRY }}/${IMAGE_NAME}:main"
+          NEW_VERSION="${{ steps.get_tag.outputs.new_version }}"
 
+          # Pull the built image
+          docker pull ${SOURCE_TAG}
+
+          # Tag with version and latest-pre
+          docker tag ${SOURCE_TAG} ${{ env.REGISTRY }}/${IMAGE_NAME}:${NEW_VERSION}
+          docker tag ${SOURCE_TAG} ${{ env.REGISTRY }}/${IMAGE_NAME}:latest-pre
+
+          # Push new tags
+          docker push ${{ env.REGISTRY }}/${IMAGE_NAME}:${NEW_VERSION}
+          docker push ${{ env.REGISTRY }}/${IMAGE_NAME}:latest-pre
+
+  # Tag existing Docker image for production (no rebuild)
   create-production-release:
     name: Create Production Release
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [quality, test]
     if: startsWith(github.ref, 'refs/tags/v')
 
     permissions:

@@ -65,7 +65,11 @@ export default function ComparisonView() {
               </CardHeader>
               <CardContent className="p-4">
                 <div className="h-[500px]">
-                  <Treemap data={scanResult.root} onNodeClick={handleNodeClick} />
+                  <Treemap
+                    data={scanResult.root}
+                    onNodeClick={handleNodeClick}
+                    config={scanResult.treemapConfig}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -78,7 +82,11 @@ export default function ComparisonView() {
               </CardHeader>
               <CardContent className="p-4">
                 <div className="h-[500px]">
-                  <Treemap data={comparisonScanResult.root} onNodeClick={() => {}} />
+                  <Treemap
+                    data={comparisonScanResult.root}
+                    onNodeClick={() => {}}
+                    config={comparisonScanResult.treemapConfig}
+                  />
                 </div>
               </CardContent>
             </Card>

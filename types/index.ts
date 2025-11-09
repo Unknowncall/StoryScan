@@ -21,11 +21,20 @@ export interface ScanProgress {
   currentPath: string;
 }
 
+export interface TreemapConfig {
+  maxNodes: number;
+  maxDepth: number;
+  lightThreshold: number;
+  moderateThreshold: number;
+  aggressiveThreshold: number;
+}
+
 export interface ScanResult {
   directory: DirectoryConfig;
   root: FileNode;
   totalSize: number;
   scannedAt: string;
+  treemapConfig?: TreemapConfig;
 }
 
 export interface TreemapNode {

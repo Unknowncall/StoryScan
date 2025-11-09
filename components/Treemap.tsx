@@ -6,9 +6,19 @@ import { FileNode } from '@/types';
 import { formatBytes, formatPercentage, getColorForExtension, getColorForPath } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
+interface TreemapConfig {
+  maxNodes: number;
+  maxDepth: number;
+  lightThreshold: number;
+  moderateThreshold: number;
+  aggressiveThreshold: number;
+}
+
 interface TreemapProps {
   data: FileNode;
   onNodeClick?: (node: FileNode) => void;
+  config?: TreemapConfig;
+  // Legacy props for backwards compatibility
   maxDepth?: number;
   minSizePercentage?: number;
   maxNodes?: number;
@@ -24,10 +34,23 @@ interface TreemapData extends d3.HierarchyRectangularNode<FileNode> {
 export default function Treemap({
   data,
   onNodeClick,
-  maxDepth = 5,
-  minSizePercentage = 0.001, // Global safety net (very permissive)
-  maxNodes = 3000, // Max nodes to render (safety ceiling)
+  config,
+  // Legacy props for backwards compatibility
+  maxDepth: legacyMaxDepth,
+  minSizePercentage: legacyMinSizePercentage,
+  maxNodes: legacyMaxNodes,
 }: TreemapProps) {
+  // Use config if provided, otherwise fall back to legacy props or defaults
+  const treemapConfig = config || {
+    maxNodes: legacyMaxNodes || 20000,
+    maxDepth: legacyMaxDepth || 5,
+    lightThreshold: 5000,
+    moderateThreshold: 15000,
+    aggressiveThreshold: 50000,
+  };
+
+  const { maxDepth, maxNodes, lightThreshold, moderateThreshold, aggressiveThreshold } =
+    treemapConfig;
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredNode, setHoveredNode] = useState<FileNode | null>(null);
@@ -74,57 +97,108 @@ export default function Treemap({
 
     const g = svg.append('g');
 
-    // Adaptive filtering strategy
+    // NEW ADAPTIVE FILTERING STRATEGY
+    // Determines filtering aggressiveness based on total item count
     const totalSize = root.value || 1;
 
-    // Strategy 1: Dynamic absolute minimum (scales with dataset size)
-    const dynamicAbsoluteMin = totalSize * 0.0001; // 0.01% of total
+    // First, count all descendants (excluding root)
+    const allDescendants = root.descendants().filter((d) => d.depth > 0 && d.depth <= maxDepth);
+    const totalItemCount = allDescendants.length;
 
-    // Strategy 2: Global safety net (very permissive)
-    const globalMinSize = (totalSize * minSizePercentage) / 100;
+    // Determine which filtering tier to use based on item count
+    let filteringTier: 'none' | 'light' | 'moderate' | 'aggressive';
+    if (totalItemCount < lightThreshold) {
+      filteringTier = 'none';
+    } else if (totalItemCount < moderateThreshold) {
+      filteringTier = 'light';
+    } else if (totalItemCount < aggressiveThreshold) {
+      filteringTier = 'moderate';
+    } else {
+      filteringTier = 'aggressive';
+    }
 
-    // Build a map of parent -> children for per-directory filtering
-    const parentChildrenMap = new Map<string, typeof root.children>();
-    root.descendants().forEach((node) => {
-      if (node.children && node.children.length > 0) {
-        parentChildrenMap.set(node.data.path, node.children);
-      }
-    });
+    console.log(`[Treemap] Total items: ${totalItemCount}, Filtering tier: ${filteringTier}`);
 
-    // Helper function: Calculate top N using logarithmic scale
-    const getTopN = (totalChildren: number): number => {
-      // Show more items when there are fewer, less when there are many
-      // Formula: percentage decreases logarithmically as count increases
-      const percentage = Math.max(0.05, 0.3 - Math.log10(totalChildren) * 0.1); // 30% to 5%
-      const calculated = Math.ceil(totalChildren * percentage);
-      // Apply floor (min 20) and ceiling (max 2000)
-      return Math.min(Math.max(calculated, 20), 2000);
-    };
+    // Apply filtering based on tier
+    let nodes: typeof allDescendants;
 
-    // Build a set of nodes that should be visible based on "top N per directory"
-    const topNPerDirectorySet = new Set<string>();
-    parentChildrenMap.forEach((children) => {
-      if (!children) return;
-      const sortedChildren = [...children].sort((a, b) => (b.value || 0) - (a.value || 0));
-      const topN = getTopN(children.length);
-      sortedChildren.slice(0, topN).forEach((child) => {
-        topNPerDirectorySet.add(child.data.path);
+    if (filteringTier === 'none') {
+      // Tier 1: No filtering - show everything
+      nodes = allDescendants;
+    } else if (filteringTier === 'light') {
+      // Tier 2: Light filtering - remove only very tiny items (<0.001% of total)
+      const tinyItemThreshold = totalSize * 0.00001; // 0.001% of total
+      nodes = allDescendants.filter((d) => (d.value || 0) >= tinyItemThreshold);
+    } else if (filteringTier === 'moderate') {
+      // Tier 3: Moderate filtering
+      // Keep items that are either:
+      // - At least 0.5% of their parent, OR
+      // - In the top 50% of items per directory
+      const parentChildrenMap = new Map<string, typeof root.children>();
+      root.descendants().forEach((node) => {
+        if (node.children && node.children.length > 0) {
+          parentChildrenMap.set(node.data.path, node.children);
+        }
       });
-    });
 
-    // Get all descendants and filter using hybrid strategy
-    let nodes = root
-      .descendants()
-      .filter((d) => {
-        // Skip root node
-        if (d.depth === 0) return false;
+      const topNPerDirectorySet = new Set<string>();
+      parentChildrenMap.forEach((children) => {
+        if (!children) return;
+        const sortedChildren = [...children].sort((a, b) => (b.value || 0) - (a.value || 0));
+        const topN = Math.max(Math.ceil(children.length * 0.5), 10); // Keep top 50%, min 10
+        sortedChildren.slice(0, topN).forEach((child) => {
+          topNPerDirectorySet.add(child.data.path);
+        });
+      });
 
-        // Limit depth
-        if (d.depth > maxDepth) return false;
-
+      nodes = allDescendants.filter((d) => {
         const nodeSize = d.value || 0;
 
-        // Strategy 1: Dynamic absolute minimum (e.g., 5GB for 51TB dataset)
+        // Check if at least 0.5% of parent
+        if (d.parent && d.parent.value) {
+          const percentOfParent = (nodeSize / d.parent.value) * 100;
+          if (percentOfParent >= 0.5) return true;
+        }
+
+        // Check if in top N for this directory
+        if (topNPerDirectorySet.has(d.data.path)) return true;
+
+        return false;
+      });
+    } else {
+      // Tier 4: Aggressive filtering (for very large datasets >50k items)
+      // Use the original hybrid strategy
+      const dynamicAbsoluteMin = totalSize * 0.0001; // 0.01% of total
+      const globalMinSize = totalSize * 0.00001; // 0.001% of total
+
+      const parentChildrenMap = new Map<string, typeof root.children>();
+      root.descendants().forEach((node) => {
+        if (node.children && node.children.length > 0) {
+          parentChildrenMap.set(node.data.path, node.children);
+        }
+      });
+
+      // Logarithmic top N
+      const getTopN = (totalChildren: number): number => {
+        const percentage = Math.max(0.05, 0.3 - Math.log10(totalChildren) * 0.1);
+        const calculated = Math.ceil(totalChildren * percentage);
+        return Math.min(Math.max(calculated, 20), 2000);
+      };
+
+      const topNPerDirectorySet = new Set<string>();
+      parentChildrenMap.forEach((children) => {
+        if (!children) return;
+        const sortedChildren = [...children].sort((a, b) => (b.value || 0) - (a.value || 0));
+        const topN = getTopN(children.length);
+        sortedChildren.slice(0, topN).forEach((child) => {
+          topNPerDirectorySet.add(child.data.path);
+        });
+      });
+
+      nodes = allDescendants.filter((d) => {
+        const nodeSize = d.value || 0;
+
+        // Strategy 1: Dynamic absolute minimum
         if (nodeSize >= dynamicAbsoluteMin) return true;
 
         // Strategy 2: Relative to parent (at least 1% of parent)
@@ -133,19 +207,23 @@ export default function Treemap({
           if (percentOfParent >= 1.0) return true;
         }
 
-        // Strategy 3: Top N per directory (logarithmic scale)
+        // Strategy 3: Top N per directory
         if (topNPerDirectorySet.has(d.data.path)) return true;
 
-        // Strategy 4: Global safety net (very permissive)
+        // Strategy 4: Global safety net
         if (nodeSize >= globalMinSize) return true;
 
         return false;
-      })
-      .sort((a, b) => (b.value || 0) - (a.value || 0));
+      });
+    }
 
-    // Apply hard ceiling for performance (safety net)
+    // Sort by size
+    nodes = nodes.sort((a, b) => (b.value || 0) - (a.value || 0));
+
+    // Apply hard ceiling for performance (only if we exceed it)
     const wasTruncated = nodes.length > maxNodes;
     if (wasTruncated) {
+      console.warn(`[Treemap] Truncating from ${nodes.length} to ${maxNodes} nodes`);
       nodes = nodes.slice(0, maxNodes);
     }
 
@@ -273,7 +351,17 @@ export default function Treemap({
           text.text(textContent + '...');
         }
       });
-  }, [data, dimensions, onNodeClick, maxDepth, minSizePercentage, maxNodes]);
+  }, [
+    data,
+    dimensions,
+    onNodeClick,
+    config,
+    lightThreshold,
+    moderateThreshold,
+    aggressiveThreshold,
+    maxDepth,
+    maxNodes,
+  ]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative">
