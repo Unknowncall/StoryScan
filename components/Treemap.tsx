@@ -225,61 +225,6 @@ export default function Treemap({
           text.text(textContent + '...');
         }
       });
-
-    // Add truncation indicators for directories with hidden items
-    cell
-      .filter((d) => {
-        // Only show for directories that have hidden items
-        const hiddenInfo = hiddenItemsMap.get(d.data.path);
-        if (!hiddenInfo) return false;
-
-        // Only show if cell is large enough
-        const width = d.x1 - d.x0;
-        const height = d.y1 - d.y0;
-        return width >= 120 && height >= 40;
-      })
-      .each(function (d) {
-        const hiddenInfo = hiddenItemsMap.get(d.data.path);
-        if (!hiddenInfo) return;
-
-        const cellGroup = d3.select(this);
-        const width = d.x1 - d.x0;
-        const height = d.y1 - d.y0;
-
-        // Calculate position for indicator (bottom-right corner)
-        const indicatorWidth = Math.min(100, width - 8);
-        const indicatorHeight = 20;
-        const x = width - indicatorWidth - 4;
-        const y = height - indicatorHeight - 4;
-
-        // Add background rectangle for indicator
-        cellGroup
-          .append('rect')
-          .attr('x', x)
-          .attr('y', y)
-          .attr('width', indicatorWidth)
-          .attr('height', indicatorHeight)
-          .attr('fill', 'rgba(0, 0, 0, 0.7)')
-          .attr('rx', 3)
-          .attr('stroke', 'rgba(255, 255, 255, 0.3)')
-          .attr('stroke-width', 1)
-          .style('pointer-events', 'none');
-
-        // Add text showing hidden count
-        const hiddenText = `+${hiddenInfo.count} more`;
-        cellGroup
-          .append('text')
-          .attr('x', x + indicatorWidth / 2)
-          .attr('y', y + indicatorHeight / 2 + 1)
-          .text(hiddenText)
-          .attr('fill', '#ffffff')
-          .attr('font-size', '10px')
-          .attr('font-weight', '500')
-          .attr('text-anchor', 'middle')
-          .attr('dominant-baseline', 'middle')
-          .style('pointer-events', 'none')
-          .style('text-shadow', '0 1px 2px rgba(0,0,0,0.8)');
-      });
   }, [data, dimensions, onNodeClick, maxDepth, minSizePercentage, maxNodes]);
 
   return (
