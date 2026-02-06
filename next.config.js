@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ['better-sqlite3'],
   // Allow accessing the API from any origin (for Docker networking)
   async headers() {
     return [

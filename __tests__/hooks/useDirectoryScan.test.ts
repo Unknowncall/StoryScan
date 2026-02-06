@@ -102,8 +102,9 @@ describe('useDirectoryScan', () => {
       result.current.handleRefresh();
     });
 
+    // Calls: 1 load dirs + 1 initial scan + 1 history record + 1 refresh scan + 1 history record = 5
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(global.fetch).toHaveBeenCalledTimes(5);
     });
   });
 

@@ -5,6 +5,7 @@ import { AppStateProvider } from './AppStateContext';
 import { ScanProvider } from './ScanContext';
 import { FilterProvider } from './FilterContext';
 import { ComparisonProvider } from './ComparisonContext';
+import { HistoryProvider } from './HistoryContext';
 
 /**
  * AppProvider combines all context providers in the correct order.
@@ -14,13 +15,16 @@ import { ComparisonProvider } from './ComparisonContext';
  * 2. ScanProvider - Directory scanning and navigation (depends on AppState)
  * 3. FilterProvider - Search and filtering (depends on Scan)
  * 4. ComparisonProvider - Comparison mode (depends on Scan)
+ * 5. HistoryProvider - Historical scan tracking (independent)
  */
 export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppStateProvider>
       <ScanProvider>
         <FilterProvider>
-          <ComparisonProvider>{children}</ComparisonProvider>
+          <ComparisonProvider>
+            <HistoryProvider>{children}</HistoryProvider>
+          </ComparisonProvider>
         </FilterProvider>
       </ScanProvider>
     </AppStateProvider>

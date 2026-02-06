@@ -66,6 +66,12 @@ jest.mock('@/components/FileTypeBreakdown', () => {
   };
 });
 
+jest.mock('@/components/HistoryView', () => {
+  return function MockHistoryView() {
+    return <div>HistoryView</div>;
+  };
+});
+
 describe('MainContent', () => {
   const mockSetViewMode = jest.fn();
   const mockSetSearchQuery = jest.fn();
@@ -139,13 +145,14 @@ describe('MainContent', () => {
     expect(screen.getByText('FileTypeBreakdown')).toBeInTheDocument();
   });
 
-  it('renders view mode selector with Treemap and Tree buttons', () => {
+  it('renders view mode selector with Treemap, Tree, and History buttons', () => {
     render(<MainContent />);
     expect(screen.getByText('View:')).toBeInTheDocument();
     // Use getAllByText since "Treemap" appears in both button and mock component
     const treemapElements = screen.getAllByText('Treemap');
     expect(treemapElements.length).toBeGreaterThan(0);
     expect(screen.getByText('Tree')).toBeInTheDocument();
+    expect(screen.getByText('History')).toBeInTheDocument();
   });
 
   it('calls setViewMode when Treemap button is clicked', () => {
@@ -238,5 +245,57 @@ describe('MainContent', () => {
     // The component should render with currentNode data
     const visualizationDiv = container.querySelector('.h-\\[600px\\]');
     expect(visualizationDiv).toBeInTheDocument();
+  });
+
+  it('renders HistoryView when viewMode is history', () => {
+    mockUseAppState.mockReturnValueOnce({
+      viewMode: 'history',
+      setViewMode: mockSetViewMode,
+    });
+    render(<MainContent />);
+    expect(screen.getByText('HistoryView')).toBeInTheDocument();
+  });
+
+  it('hides SearchBar, AdvancedFiltersPanel, FileTypeBreakdown in history mode', () => {
+    mockUseAppState.mockReturnValueOnce({
+      viewMode: 'history',
+      setViewMode: mockSetViewMode,
+    });
+    render(<MainContent />);
+    expect(screen.queryByText('SearchBar')).not.toBeInTheDocument();
+    expect(screen.queryByText('AdvancedFiltersPanel')).not.toBeInTheDocument();
+    expect(screen.queryByText('FileTypeBreakdown')).not.toBeInTheDocument();
+  });
+
+  it('hides Breadcrumb in history mode even with navigation path', () => {
+    mockUseScan.mockReturnValueOnce({
+      currentNode: mockNode,
+      scanResult: { root: mockNode, scannedAt: '2024-01-01T00:00:00Z' },
+      navigationPath: ['root', 'folder1'],
+      handleNodeClick: mockHandleNodeClick,
+      handleBreadcrumbNavigate: mockHandleBreadcrumbNavigate,
+    });
+    mockUseAppState.mockReturnValueOnce({
+      viewMode: 'history',
+      setViewMode: mockSetViewMode,
+    });
+    render(<MainContent />);
+    expect(screen.queryByText('Breadcrumb')).not.toBeInTheDocument();
+  });
+
+  it('still shows Stats in history mode', () => {
+    mockUseAppState.mockReturnValueOnce({
+      viewMode: 'history',
+      setViewMode: mockSetViewMode,
+    });
+    render(<MainContent />);
+    expect(screen.getByText('Stats')).toBeInTheDocument();
+  });
+
+  it('calls setViewMode when History button is clicked', () => {
+    render(<MainContent />);
+    const historyButton = screen.getByText('History').closest('button');
+    fireEvent.click(historyButton!);
+    expect(mockSetViewMode).toHaveBeenCalledWith('history');
   });
 });

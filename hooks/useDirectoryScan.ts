@@ -87,6 +87,13 @@ export function useDirectoryScan(autoRefreshInterval: number = 0): UseDirectoryS
 
       setScanResult(data);
       setLastScanTime(new Date());
+
+      // Record history snapshots for tracked paths (fire-and-forget)
+      fetch('/api/history/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ directoryConfigId: dir.id, rootPath: dir.path, scanResult: data }),
+      }).catch(() => {}); // Silent fail -- history recording should never block scans
     } catch (err) {
       logger.error('❌ Error scanning directory:', err);
       logger.groupEnd();

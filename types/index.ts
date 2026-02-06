@@ -70,4 +70,36 @@ export interface FilterPreset {
   filters: AdvancedFilters;
 }
 
-export type ViewMode = 'treemap' | 'tree';
+export type ViewMode = 'treemap' | 'tree' | 'history';
+
+export interface TrackedPath {
+  id: number;
+  path: string;
+  label: string;
+  directoryConfigId?: string;
+  createdAt: string;
+  isActive: boolean;
+}
+
+export interface HistorySnapshot {
+  id: number;
+  trackedPathId: number;
+  sizeBytes: number;
+  fileCount: number;
+  folderCount: number;
+  recordedAt: string;
+}
+
+export interface HistoryDataPoint {
+  date: Date;
+  sizeBytes: number;
+  fileCount: number;
+  folderCount: number;
+}
+
+export interface TrackedPathHistory {
+  trackedPath: TrackedPath;
+  dataPoints: HistoryDataPoint[];
+}
+
+export type HistoryTimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | 'ALL';

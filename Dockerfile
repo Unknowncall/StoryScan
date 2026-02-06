@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Install build tools for native modules (better-sqlite3)
+RUN apk add --no-cache python3 make g++
+
 # Copy package files
 COPY package*.json ./
 
@@ -29,9 +32,10 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/node_modules ./node_modules
 
-# Create a non-root user
+# Create a non-root user and data directory for SQLite
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs && \
+    mkdir -p /app/data && \
     chown -R nextjs:nodejs /app
 
 USER nextjs
@@ -39,8 +43,12 @@ USER nextjs
 # Expose the port
 EXPOSE 3000
 
-# Set default environment variable for scan directories
+# Persistent storage for SQLite database
+VOLUME /app/data
+
+# Set default environment variables
 ENV SCAN_DIRECTORIES=/data
+ENV STORYSCAN_DB_PATH=/app/data/storyscan.db
 
 # Start the application
 CMD ["npm", "start"]

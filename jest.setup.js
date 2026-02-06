@@ -63,10 +63,19 @@ const createD3SelectionMock = () => {
     selectAll: jest.fn(function () {
       return this;
     }),
+    select: jest.fn(function () {
+      return this;
+    }),
     data: jest.fn(function () {
       return this;
     }),
+    datum: jest.fn(function () {
+      return this;
+    }),
     join: jest.fn(function () {
+      return this;
+    }),
+    enter: jest.fn(function () {
       return this;
     }),
     remove: jest.fn(function () {
@@ -84,6 +93,13 @@ const createD3SelectionMock = () => {
     delay: jest.fn(function () {
       return this;
     }),
+    call: jest.fn(function () {
+      return this;
+    }),
+    node: jest.fn(() => ({
+      getTotalLength: jest.fn(() => 100),
+      getBBox: jest.fn(() => ({ width: 100, height: 40, x: 0, y: 0 })),
+    })),
   };
   return mockSelection;
 };
@@ -149,4 +165,74 @@ jest.mock('d3', () => ({
   }),
   scaleOrdinal: jest.fn(() => jest.fn((d) => '#000000')),
   schemeTableau10: [],
+  // D3 functions used by HistoryGraph (line chart)
+  extent: jest.fn(() => [new Date('2025-01-01'), new Date('2025-12-31')]),
+  max: jest.fn(() => 1000000),
+  scaleTime: jest.fn(() => {
+    const scale = jest.fn((d) => 0);
+    scale.domain = jest.fn(function () {
+      return this;
+    });
+    scale.range = jest.fn(function () {
+      return this;
+    });
+    scale.invert = jest.fn(() => new Date());
+    return scale;
+  }),
+  scaleLinear: jest.fn(() => {
+    const scale = jest.fn((d) => 0);
+    scale.domain = jest.fn(function () {
+      return this;
+    });
+    scale.range = jest.fn(function () {
+      return this;
+    });
+    return scale;
+  }),
+  line: jest.fn(() => {
+    const lineGen = jest.fn(() => 'M0,0L10,10');
+    lineGen.x = jest.fn(function () {
+      return this;
+    });
+    lineGen.y = jest.fn(function () {
+      return this;
+    });
+    lineGen.curve = jest.fn(function () {
+      return this;
+    });
+    return lineGen;
+  }),
+  axisBottom: jest.fn(() => {
+    const axis = jest.fn();
+    axis.ticks = jest.fn(function () {
+      return this;
+    });
+    axis.tickFormat = jest.fn(function () {
+      return this;
+    });
+    axis.tickSize = jest.fn(function () {
+      return this;
+    });
+    return axis;
+  }),
+  axisLeft: jest.fn(() => {
+    const axis = jest.fn();
+    axis.ticks = jest.fn(function () {
+      return this;
+    });
+    axis.tickFormat = jest.fn(function () {
+      return this;
+    });
+    axis.tickSize = jest.fn(function () {
+      return this;
+    });
+    return axis;
+  }),
+  bisector: jest.fn(() => ({
+    left: jest.fn(() => 0),
+    right: jest.fn(() => 0),
+  })),
+  timeFormat: jest.fn(() => jest.fn(() => 'Jan 01, 2025 00:00')),
+  pointer: jest.fn(() => [0, 0]),
+  curveMonotoneX: 'curveMonotoneX',
 }));

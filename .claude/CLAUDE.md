@@ -1,8 +1,8 @@
 # StoryScan - Claude Context
 
-**Last Updated:** 2025-11-08
-**Version:** 1.6.3 (Phase 1, 2 Complete + Major Refactoring + Comprehensive Test Coverage)
-**Status:** Active Development - High Quality Codebase with 100% Core Component Coverage
+**Last Updated:** 2026-02-06
+**Version:** 1.7.0 (Phase 1, 2, 4-partial Complete + Historical Tracking + Comprehensive Test Coverage)
+**Status:** Active Development - High Quality Codebase with Historical Scan Tracking
 
 ## Project Overview
 
@@ -52,6 +52,24 @@ StoryScan is a **beautiful web-based disk usage visualizer** for Unraid servers,
 - ⏳ **Zoom & Pan Controls** - Coming next
 - ⏳ **Customizable Color Schemes** - Coming later
 
+**Phase 4 Features (Partial - Historical Tracking):**
+
+- ✅ **Historical Scan Tracking** - SQLite-backed persistence for scan history
+  - SQLite database via `better-sqlite3` for storing scan snapshots
+  - Configurable path tracking - users select which directories to monitor
+  - D3.js line chart showing folder size trends over time
+  - Automatic snapshot recording after each scan (fire-and-forget)
+  - Time range selector (1W, 1M, 3M, 6M, 1Y, ALL)
+  - CRUD for tracked paths (add/remove/toggle active)
+  - New "History" view mode alongside Treemap and Tree
+  - Database: `lib/db.ts`, API: 4 endpoints, Hook: `useHistoryData.ts`
+  - Components: HistoryView, HistoryGraph, TrackedPathsManager
+  - Context: HistoryContext wrapping useHistoryData
+  - 92 new tests (db: 38, hook: 16, components: 38)
+- ⏳ **Duplicate File Detection** - Coming later
+- ⏳ **Stale File Finder** - Coming later
+- ⏳ **Space Prediction Tool** - Coming later
+
 **Phase 5 Features (Partial):**
 
 - ✅ **Shareable Links** - Generate URLs with current state, QR codes for mobile access
@@ -96,7 +114,7 @@ StoryScan is a **beautiful web-based disk usage visualizer** for Unraid servers,
 
 **Quality Assurance:**
 
-- ✅ 455 passing tests (440 unit + 15 E2E)
+- ✅ 555 passing tests (540 unit + 15 E2E)
 - ✅ Jest + React Testing Library for component tests
 - ✅ Playwright for E2E tests
 - ✅ 100% test pass rate
@@ -190,8 +208,17 @@ StoryScan is a **beautiful web-based disk usage visualizer** for Unraid servers,
 StoryScan/
 ├── app/
 │   ├── api/
-│   │   └── scan/
-│   │       └── route.ts          # Directory scanning API endpoint
+│   │   ├── scan/
+│   │   │   └── route.ts          # Directory scanning API endpoint
+│   │   └── history/
+│   │       ├── tracked-paths/
+│   │       │   ├── route.ts      # GET/POST tracked paths
+│   │       │   └── [id]/
+│   │       │       └── route.ts  # PATCH/DELETE single tracked path
+│   │       ├── snapshots/
+│   │       │   └── route.ts      # GET historical snapshots
+│   │       └── record/
+│   │           └── route.ts      # POST record snapshots after scan
 │   ├── globals.css               # Global styles with CSS variables
 │   ├── layout.tsx                # Root layout with metadata
 │   └── page.tsx                  # Main application page
@@ -208,16 +235,29 @@ StoryScan/
 │   ├── AdvancedFiltersPanel.tsx # Size/date filters
 │   ├── ComparisonStats.tsx      # Side-by-side comparison
 │   ├── TreeView.tsx             # Collapsible tree view
-│   └── ShareButton.tsx          # Shareable links with QR code
+│   ├── ShareButton.tsx          # Shareable links with QR code
+│   ├── HistoryView.tsx          # History view orchestrator
+│   ├── HistoryGraph.tsx         # D3 line chart for history
+│   └── TrackedPathsManager.tsx  # Track/untrack paths UI
 ├── hooks/
 │   ├── useDirectoryScan.ts      # Directory scanning logic
 │   ├── useNavigation.ts         # Navigation state management
 │   ├── useFileFiltering.ts      # Search and filtering logic
 │   ├── useComparisonMode.ts     # Comparison mode logic
 │   ├── useUrlState.ts           # URL state synchronization
+│   ├── useHistoryData.ts        # History data management hook
 │   └── use-toast.ts             # Toast notifications
+├── contexts/
+│   ├── AppProvider.tsx           # Combined context provider hierarchy
+│   ├── AppStateContext.tsx       # App state (dark mode, view mode)
+│   ├── ScanContext.tsx           # Scan state management
+│   ├── FilterContext.tsx         # Filter state management
+│   ├── ComparisonContext.tsx     # Comparison mode state
+│   └── HistoryContext.tsx        # History context provider
 ├── lib/
-│   └── utils.ts                 # Utilities (formatting, export, clipboard)
+│   ├── utils.ts                 # Utilities (formatting, export, clipboard)
+│   ├── db.ts                    # SQLite database layer (better-sqlite3)
+│   └── logger.ts                # Logging utility
 ├── types/
 │   └── index.ts                 # TypeScript type definitions
 ├── __tests__/                   # Jest unit tests
@@ -737,7 +777,7 @@ npm run test:watch      # Watch mode
 npm run test:coverage   # Coverage report
 ```
 
-**Coverage:** 238 tests across utilities, components, custom hooks, and layout components
+**Coverage:** 540 tests across utilities, components, custom hooks, layout components, database layer, and history features
 
 ### E2E Tests (Playwright)
 
@@ -751,8 +791,8 @@ npm run test:e2e:ui     # Run with UI
 ### All Tests
 
 ```bash
-make test-all           # 253 total tests (238 unit + 15 E2E)
-npm test                # Run unit tests only (238 tests)
+make test-all           # 555 total tests (540 unit + 15 E2E)
+npm test                # Run unit tests only (540 tests)
 npm run test:e2e        # Run E2E tests only (15 tests)
 ```
 
@@ -791,10 +831,9 @@ Access at: `http://unraid-server-ip:3000`
 ### Current Limitations
 
 1. No user authentication (single-user app)
-2. No persistent storage (scans are ephemeral)
-3. No background scanning (scan on-demand only)
-4. Limited to configured directories via ENV
-5. No file operations (view-only)
+2. No background scanning (scan on-demand only)
+3. Limited to configured directories via ENV
+4. No file operations (view-only)
 
 ### Performance Considerations
 
@@ -829,8 +868,8 @@ Consider: Separate Node.js backend if compute needs increase
 
 ### Database
 
-Current: None (stateless)
-Consider: SQLite/PostgreSQL for historical tracking
+Current: SQLite via better-sqlite3 (historical scan tracking)
+Consider: PostgreSQL if multi-user support is needed
 
 ---
 
@@ -1010,7 +1049,7 @@ make help               # Show all commands
 
 ## Status Indicators
 
-**Build Status:** ✅ Passing (455/455 tests)
+**Build Status:** ✅ Passing (555/555 tests)
 **Coverage:** ✅ Excellent - 69.56% overall, 79.74% components (All features, hooks, and layout components fully tested)
 **CI/CD:** ✅ Configured and working
 **Docker:** ✅ Multi-arch builds working
@@ -1020,6 +1059,7 @@ make help               # Show all commands
 **Phase 1:** ✅ Complete (4/4 features) + 30 tests
 **Phase 2:** ✅ Complete (4/4 features) + 70 tests
 **Phase 3:** 🔄 Partial (1/3 features) - Alternative View Modes (2 views: Treemap & Tree) + 16 tests
+**Phase 4:** 🔄 Partial (1/4 features) - Historical Scan Tracking complete + 92 tests
 **Phase 5:** 🔄 Partial (1/3 features) - Shareable Links complete + 16 tests
 **Refactoring:** ✅ Complete - Custom hooks (36 tests) + Layout components (55 tests), Code organization improved 70%
 **Core Components:** ✅ Comprehensive coverage (97 tests) - TopItemsPanel (100%), AdvancedFiltersPanel (100%), DirectorySelector (100%), Breadcrumb (100%), SearchBar (100%)
@@ -1040,17 +1080,47 @@ make help               # Show all commands
   - ❌ List View - Removed (redundant)
   - ⏳ Zoom & Pan Controls - Next to implement
   - ⏳ Customizable Color Schemes - After Zoom & Pan
+- 🔄 Phase 4 is partial
+  - ✅ Historical Scan Tracking - Complete (SQLite, D3 line chart, tracked paths) + 92 tests
+    - Database layer: `lib/db.ts` (38 tests)
+    - Hook: `hooks/useHistoryData.ts` (16 tests)
+    - Components: HistoryView (10), HistoryGraph (12), TrackedPathsManager (16)
+    - Context: `contexts/HistoryContext.tsx`
+    - API: 4 endpoints (tracked-paths CRUD, snapshots query, record)
+    - Scan integration: fire-and-forget recording in `useDirectoryScan.ts`
+  - ⏳ Duplicate File Detection - Coming later
+  - ⏳ Stale File Finder - Coming later
+  - ⏳ Space Prediction Tool - Coming later
 - 🔄 Phase 5 is partial
   - ✅ Shareable Links - Complete (URL state, QR codes, share modal) + 16 tests
   - ⏳ Keyboard Shortcuts - Coming later
   - ⏳ Settings Panel - Coming later
 - ✅ Major refactoring complete (custom hooks, layout components, code organization)
-- Total: 455 tests passing (440 unit + 15 E2E)
-- **Testing:** All components, hooks, and layout components tested
+- Total: 555 tests passing (540 unit + 15 E2E)
+- **Testing:** All components, hooks, layout components, database layer, and history features tested
 - **Code Quality:** page.tsx reduced from 838 to 255 lines (70% reduction)
-- **Current Progress: 10/17 features (59%)**
+- **Current Progress: 11/17 features (65%)**
 - See FEATURE_ROADMAP.md for details
 - **Recent Changes:**
+  - **Historical Scan Tracking (Session 7)** - Full persistence layer for tracking directory sizes over time:
+    - **New Infrastructure:** SQLite database via `better-sqlite3`, auto-initializes with WAL mode
+    - **Database:** `lib/db.ts` - Singleton connection, CRUD for tracked paths + history snapshots
+    - **API Endpoints (4 new):**
+      - `GET/POST /api/history/tracked-paths` - List/add tracked paths
+      - `PATCH/DELETE /api/history/tracked-paths/[id]` - Update/remove tracked path
+      - `GET /api/history/snapshots?pathIds=1,2&range=1M` - Query historical data
+      - `POST /api/history/record` - Record snapshots (called after each scan)
+    - **Hook + Context:** `useHistoryData.ts` + `HistoryContext.tsx` for state management
+    - **Scan Integration:** Fire-and-forget POST to `/api/history/record` after each scan
+    - **UI Components:**
+      - `HistoryView.tsx` - Orchestrator with time range selector
+      - `HistoryGraph.tsx` - D3.js line chart (scaleTime, animated lines, hover tooltip)
+      - `TrackedPathsManager.tsx` - Add/remove/toggle tracked paths
+    - **MainContent Updates:** New "History" view mode toggle, conditional rendering
+    - **Config Changes:** `next.config.js` serverExternalPackages, Dockerfile build tools + data volume
+    - **Types:** TrackedPath, HistorySnapshot, HistoryDataPoint, TrackedPathHistory, HistoryTimeRange
+    - **Tests:** 92 new tests (db: 38, useHistoryData: 16, HistoryView: 10, HistoryGraph: 12, TrackedPathsManager: 16)
+    - **Total:** 540 unit tests + 15 E2E = 555 tests passing
   - **Item Count-Based Adaptive Filtering (Session 6)** - Complete redesign of treemap filtering strategy:
     - **Problem Solved:** Massive over-filtering on large datasets (51TB showed almost nothing)
     - **Solution:** Replaced size-based filtering with intelligent item count-based tiers

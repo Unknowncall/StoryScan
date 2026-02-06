@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Grid3x3, FolderTree } from 'lucide-react';
+import { Grid3x3, FolderTree, TrendingUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -12,9 +12,11 @@ import Breadcrumb from '@/components/Breadcrumb';
 import Treemap from '@/components/Treemap';
 import TreeView from '@/components/TreeView';
 import FileTypeBreakdown from '@/components/FileTypeBreakdown';
+import HistoryView from '@/components/HistoryView';
 import { useScan } from '@/contexts/ScanContext';
 import { useAppState } from '@/contexts/AppStateContext';
 import { useFilter } from '@/contexts/FilterContext';
+import { ViewMode } from '@/types';
 
 export default function MainContent() {
   const { currentNode, scanResult, navigationPath, handleNodeClick, handleBreadcrumbNavigate } =
@@ -45,21 +47,27 @@ export default function MainContent() {
     advancedFilters.size.enabled ||
     advancedFilters.date.enabled;
 
+  const isHistoryView = viewMode === 'history';
+
   return (
     <div className="animate-fade-in space-y-6">
       {/* Stats */}
       <Stats data={currentNode} scannedAt={scanResult.scannedAt} />
 
-      {/* Search and Filter Bar */}
-      <SearchBar
-        onSearchChange={setSearchQuery}
-        onExtensionFilter={setExtensionFilter}
-        availableExtensions={availableExtensions}
-        matchCount={hasActiveFilters ? matchCount : undefined}
-      />
+      {/* Search and Filter Bar - hidden in history mode */}
+      {!isHistoryView && (
+        <SearchBar
+          onSearchChange={setSearchQuery}
+          onExtensionFilter={setExtensionFilter}
+          availableExtensions={availableExtensions}
+          matchCount={hasActiveFilters ? matchCount : undefined}
+        />
+      )}
 
-      {/* Advanced Filters Panel */}
-      <AdvancedFiltersPanel filters={advancedFilters} onFiltersChange={setAdvancedFilters} />
+      {/* Advanced Filters Panel - hidden in history mode */}
+      {!isHistoryView && (
+        <AdvancedFiltersPanel filters={advancedFilters} onFiltersChange={setAdvancedFilters} />
+      )}
 
       {/* View Mode Selector */}
       <Card>
@@ -69,7 +77,7 @@ export default function MainContent() {
             <ToggleGroup
               type="single"
               value={viewMode}
-              onValueChange={(value) => value && setViewMode(value as 'treemap' | 'tree')}
+              onValueChange={(value) => value && setViewMode(value as ViewMode)}
             >
               <ToggleGroupItem value="treemap" aria-label="Treemap view" className="gap-2">
                 <Grid3x3 className="w-4 h-4" />
@@ -79,13 +87,17 @@ export default function MainContent() {
                 <FolderTree className="w-4 h-4" />
                 <span className="hidden sm:inline">Tree</span>
               </ToggleGroupItem>
+              <ToggleGroupItem value="history" aria-label="History view" className="gap-2">
+                <TrendingUp className="w-4 h-4" />
+                <span className="hidden sm:inline">History</span>
+              </ToggleGroupItem>
             </ToggleGroup>
           </div>
         </CardContent>
       </Card>
 
-      {/* Breadcrumb Navigation */}
-      {navigationPath.length > 0 && (
+      {/* Breadcrumb Navigation - hidden in history mode */}
+      {!isHistoryView && navigationPath.length > 0 && (
         <Breadcrumb
           path={navigationPath}
           fullPath={currentNode.path}
@@ -94,29 +106,35 @@ export default function MainContent() {
       )}
 
       {/* Visualization Area - Switches based on view mode */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="h-[600px]">
-            {viewMode === 'treemap' && (
-              <Treemap
-                data={filteredNode || currentNode}
-                onNodeClick={handleNodeClick}
-                config={scanResult.treemapConfig}
-              />
-            )}
-            {viewMode === 'tree' && (
-              <TreeView data={filteredNode || currentNode} onItemClick={handleNodeClick} />
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {viewMode === 'history' ? (
+        <HistoryView />
+      ) : (
+        <Card>
+          <CardContent className="p-6">
+            <div className="h-[600px]">
+              {viewMode === 'treemap' && (
+                <Treemap
+                  data={filteredNode || currentNode}
+                  onNodeClick={handleNodeClick}
+                  config={scanResult.treemapConfig}
+                />
+              )}
+              {viewMode === 'tree' && (
+                <TreeView data={filteredNode || currentNode} onItemClick={handleNodeClick} />
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* File Type Breakdown - Full Width */}
-      <FileTypeBreakdown
-        data={currentNode}
-        onTypeClick={(category) => setTypeFilter(category || null)}
-        selectedType={typeFilter}
-      />
+      {/* File Type Breakdown - hidden in history mode */}
+      {!isHistoryView && (
+        <FileTypeBreakdown
+          data={currentNode}
+          onTypeClick={(category) => setTypeFilter(category || null)}
+          selectedType={typeFilter}
+        />
+      )}
     </div>
   );
 }
