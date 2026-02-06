@@ -400,7 +400,7 @@ describe('Database Layer (lib/db.ts)', () => {
         (call: string[]) => typeof call[0] === 'string' && call[0].includes('history_snapshots')
       );
       expect(sql).toBeDefined();
-      expect(sql[0]).toContain('?,?,?');
+      expect((sql as string[])[0]).toContain('?,?,?');
     });
 
     it('should pass path IDs as spread arguments to all()', () => {
