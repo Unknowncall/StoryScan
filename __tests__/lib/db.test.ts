@@ -269,8 +269,8 @@ describe('Database Layer (lib/db.ts)', () => {
         (call: string[]) => typeof call[0] === 'string' && call[0].includes('UPDATE tracked_paths')
       );
       expect(sql).toBeDefined();
-      expect(sql[0]).toContain('label = ?');
-      expect(sql[0]).toContain('is_active = ?');
+      expect((sql as string[])[0]).toContain('label = ?');
+      expect((sql as string[])[0]).toContain('is_active = ?');
       expect(mockRun).toHaveBeenCalledWith('Updated', 0, 3);
     });
 
@@ -320,7 +320,7 @@ describe('Database Layer (lib/db.ts)', () => {
         (call: string[]) => typeof call[0] === 'string' && call[0].includes('history_snapshots')
       );
       expect(sql).toBeDefined();
-      expect(sql[0]).toContain('-7 days');
+      expect((sql as string[])[0]).toContain('-7 days');
     });
 
     it('should query with 1M range filter', () => {
@@ -376,7 +376,7 @@ describe('Database Layer (lib/db.ts)', () => {
         (call: string[]) => typeof call[0] === 'string' && call[0].includes('history_snapshots')
       );
       expect(sql).toBeDefined();
-      expect(sql[0]).not.toContain('datetime');
+      expect((sql as string[])[0]).not.toContain('datetime');
     });
 
     it('should default to no date filter for unknown range value', () => {
@@ -388,7 +388,7 @@ describe('Database Layer (lib/db.ts)', () => {
         (call: string[]) => typeof call[0] === 'string' && call[0].includes('history_snapshots')
       );
       expect(sql).toBeDefined();
-      expect(sql[0]).not.toContain('datetime');
+      expect((sql as string[])[0]).not.toContain('datetime');
     });
 
     it('should generate correct placeholders for multiple path IDs', () => {
