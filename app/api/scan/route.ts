@@ -2,100 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { z } from 'zod';
-import { FileNode } from '@/types';
 import { createLogger } from '@/lib/logger';
+import { getConfiguredDirectories, getTreemapConfig, scanDirectory } from '@/lib/scanner';
 
-// Logger instance for API endpoints
 const logger = createLogger('API /api/scan');
 
-// Validation schemas
 const scanQuerySchema = z.object({
   dir: z.string().regex(/^\d+$/, 'Directory index must be a number').optional(),
 });
-
-// Get configured directories from environment variable
-function getConfiguredDirectories(): string[] {
-  const dirsEnv = process.env.SCAN_DIRECTORIES || '';
-  if (!dirsEnv) {
-    // Default to /data if no directories configured
-    return ['/data'];
-  }
-  return dirsEnv
-    .split(',')
-    .map((d) => d.trim())
-    .filter((d) => d.length > 0);
-}
-
-// Get treemap configuration from environment variables
-function getTreemapConfig() {
-  return {
-    maxNodes: parseInt(process.env.TREEMAP_MAX_NODES || '20000', 10),
-    maxDepth: parseInt(process.env.TREEMAP_MAX_DEPTH || '5', 10),
-    lightThreshold: parseInt(process.env.TREEMAP_LIGHT_THRESHOLD || '5000', 10),
-    moderateThreshold: parseInt(process.env.TREEMAP_MODERATE_THRESHOLD || '15000', 10),
-    aggressiveThreshold: parseInt(process.env.TREEMAP_AGGRESSIVE_THRESHOLD || '50000', 10),
-  };
-}
-
-async function getDirectorySize(dirPath: string): Promise<FileNode> {
-  const stats = await fs.stat(dirPath);
-  const name = path.basename(dirPath);
-
-  if (stats.isFile()) {
-    return {
-      name,
-      path: dirPath,
-      size: stats.size,
-      type: 'file',
-      extension: path.extname(name).slice(1).toLowerCase() || undefined,
-      modifiedTime: stats.mtimeMs,
-    };
-  }
-
-  if (stats.isDirectory()) {
-    let totalSize = 0;
-    const children: FileNode[] = [];
-
-    try {
-      const entries = await fs.readdir(dirPath, { withFileTypes: true });
-
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-
-        try {
-          const childNode = await getDirectorySize(fullPath);
-          children.push(childNode);
-          totalSize += childNode.size;
-        } catch (err) {
-          // Skip files/directories we can't access
-          logger.warn(`Skipping ${fullPath}:`, err);
-        }
-      }
-    } catch (err) {
-      logger.warn(`Cannot read directory ${dirPath}:`, err);
-    }
-
-    // Sort children by size (largest first)
-    children.sort((a, b) => b.size - a.size);
-
-    return {
-      name,
-      path: dirPath,
-      size: totalSize,
-      type: 'directory',
-      children,
-      modifiedTime: stats.mtimeMs,
-    };
-  }
-
-  return {
-    name,
-    path: dirPath,
-    size: 0,
-    type: 'file',
-    modifiedTime: stats.mtimeMs,
-  };
-}
 
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
@@ -153,7 +67,7 @@ export async function GET(request: NextRequest) {
     logger.info(`✓ Directory exists and is accessible`);
 
     const scanStartTime = Date.now();
-    const result = await getDirectorySize(targetDir);
+    const result = await scanDirectory(targetDir);
     const scanDuration = Date.now() - scanStartTime;
 
     logger.info(`✅ Scan completed successfully`);

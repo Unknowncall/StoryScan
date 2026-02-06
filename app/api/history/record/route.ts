@@ -1,54 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getActiveTrackedPaths, recordSnapshot } from '@/lib/db';
-import { FileNode } from '@/types';
 import { createLogger } from '@/lib/logger';
+import { countNodes, findNodeByPath } from '@/lib/history';
+import { getActiveTrackedPaths, recordSnapshot } from '@/lib/db';
 
 const logger = createLogger('API /api/history/record');
-
-interface FileNodeStats {
-  sizeBytes: number;
-  fileCount: number;
-  folderCount: number;
-}
-
-function countNodes(node: FileNode): FileNodeStats {
-  if (node.type === 'file') {
-    return { sizeBytes: node.size, fileCount: 1, folderCount: 0 };
-  }
-
-  let fileCount = 0;
-  let folderCount = 1; // Count this directory
-  let sizeBytes = node.size;
-
-  // Size is already computed at each node level by the scan API,
-  // so we just need to count files and folders
-  if (node.children) {
-    for (const child of node.children) {
-      if (child.type === 'file') {
-        fileCount++;
-      } else {
-        const childStats = countNodes(child);
-        fileCount += childStats.fileCount;
-        folderCount += childStats.folderCount;
-      }
-    }
-  }
-
-  return { sizeBytes, fileCount, folderCount };
-}
-
-function findNodeByPath(root: FileNode, targetPath: string): FileNode | null {
-  if (root.path === targetPath) return root;
-
-  if (root.children) {
-    for (const child of root.children) {
-      const found = findNodeByPath(child, targetPath);
-      if (found) return found;
-    }
-  }
-
-  return null;
-}
 
 export async function POST(request: NextRequest) {
   try {

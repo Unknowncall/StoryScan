@@ -1,8 +1,8 @@
 # StoryScan - Claude Context
 
 **Last Updated:** 2026-02-06
-**Version:** 1.7.0 (Phase 1, 2, 4-partial Complete + Historical Tracking + Comprehensive Test Coverage)
-**Status:** Active Development - High Quality Codebase with Historical Scan Tracking
+**Version:** 1.8.0 (Phase 1, 2, 4-partial Complete + Historical Tracking + Server-Side Cron Scheduler)
+**Status:** Active Development - High Quality Codebase with Server-Side Auto-Scanning
 
 ## Project Overview
 
@@ -114,7 +114,7 @@ StoryScan is a **beautiful web-based disk usage visualizer** for Unraid servers,
 
 **Quality Assurance:**
 
-- ✅ 555 passing tests (540 unit + 15 E2E)
+- ✅ 608 passing tests (593 unit + 15 E2E)
 - ✅ Jest + React Testing Library for component tests
 - ✅ Playwright for E2E tests
 - ✅ 100% test pass rate
@@ -257,7 +257,11 @@ StoryScan/
 ├── lib/
 │   ├── utils.ts                 # Utilities (formatting, export, clipboard)
 │   ├── db.ts                    # SQLite database layer (better-sqlite3)
+│   ├── scanner.ts               # Directory scanning logic (extracted from API route)
+│   ├── history.ts               # History recording logic (extracted from API route)
+│   ├── scheduler.ts             # Server-side cron scheduler (node-cron)
 │   └── logger.ts                # Logging utility
+├── instrumentation.ts           # Next.js startup hook (starts scheduler)
 ├── types/
 │   └── index.ts                 # TypeScript type definitions
 ├── __tests__/                   # Jest unit tests
@@ -501,6 +505,22 @@ TREEMAP_MAX_DEPTH=5
 TREEMAP_LIGHT_THRESHOLD=5000       # Below this: show everything (no filtering)
 TREEMAP_MODERATE_THRESHOLD=15000   # 5k-15k items: light filtering
 TREEMAP_AGGRESSIVE_THRESHOLD=50000 # 15k-50k: moderate, >50k: aggressive
+```
+
+**Server-Side Cron Scheduler:**
+
+```bash
+# Enable/disable the background scheduler (default: true)
+SCAN_CRON_ENABLED=true
+
+# Hours between scans. Accepts decimals (0.5 = 30min). 0 = disabled. (default: 6)
+SCAN_INTERVAL_HOURS=6
+
+# Run an initial scan immediately on server start (default: true)
+SCAN_ON_START=true
+
+# Optional: override with a custom cron expression (e.g. "0 3 * * *" for 3am daily)
+SCAN_CRON_EXPRESSION=
 ```
 
 **Production (Unraid):**
@@ -777,7 +797,7 @@ npm run test:watch      # Watch mode
 npm run test:coverage   # Coverage report
 ```
 
-**Coverage:** 540 tests across utilities, components, custom hooks, layout components, database layer, and history features
+**Coverage:** 593 tests across utilities, components, custom hooks, layout components, database layer, and history features
 
 ### E2E Tests (Playwright)
 
@@ -791,8 +811,8 @@ npm run test:e2e:ui     # Run with UI
 ### All Tests
 
 ```bash
-make test-all           # 555 total tests (540 unit + 15 E2E)
-npm test                # Run unit tests only (540 tests)
+make test-all           # 608 total tests (593 unit + 15 E2E)
+npm test                # Run unit tests only (593 tests)
 npm run test:e2e        # Run E2E tests only (15 tests)
 ```
 
@@ -1049,7 +1069,7 @@ make help               # Show all commands
 
 ## Status Indicators
 
-**Build Status:** ✅ Passing (555/555 tests)
+**Build Status:** ✅ Passing (608/608 tests)
 **Coverage:** ✅ Excellent - 69.56% overall, 79.74% components (All features, hooks, and layout components fully tested)
 **CI/CD:** ✅ Configured and working
 **Docker:** ✅ Multi-arch builds working
@@ -1088,6 +1108,11 @@ make help               # Show all commands
     - Context: `contexts/HistoryContext.tsx`
     - API: 4 endpoints (tracked-paths CRUD, snapshots query, record)
     - Scan integration: fire-and-forget recording in `useDirectoryScan.ts`
+  - ✅ **Server-Side Cron Scheduler** - Auto-scan on schedule, no browser needed
+    - `node-cron` scheduler via Next.js `instrumentation.ts`
+    - Extracted: `lib/scanner.ts`, `lib/history.ts`, `lib/scheduler.ts`
+    - Env: `SCAN_CRON_ENABLED`, `SCAN_INTERVAL_HOURS`, `SCAN_ON_START`, `SCAN_CRON_EXPRESSION`
+    - Tests: scanner (12), history (17), scheduler (24) = 53 new tests
   - ⏳ Duplicate File Detection - Coming later
   - ⏳ Stale File Finder - Coming later
   - ⏳ Space Prediction Tool - Coming later
@@ -1096,7 +1121,7 @@ make help               # Show all commands
   - ⏳ Keyboard Shortcuts - Coming later
   - ⏳ Settings Panel - Coming later
 - ✅ Major refactoring complete (custom hooks, layout components, code organization)
-- Total: 555 tests passing (540 unit + 15 E2E)
+- Total: 608 tests passing (593 unit + 15 E2E)
 - **Testing:** All components, hooks, layout components, database layer, and history features tested
 - **Code Quality:** page.tsx reduced from 838 to 255 lines (70% reduction)
 - **Current Progress: 11/17 features (65%)**
